@@ -1,0 +1,106 @@
+services:
+  # ── MySQL ─────────────────────────────────────────────────────────
+  mysql:
+    image: mysql:8.0
+    container_name: mysql
+    hostname: mysql
+    ports:
+      - "3307:3306"
+    environment:
+      - MYSQL_ROOT_PASSWORD=root123
+      - MYSQL_DATABASE=demo
+    volumes:
+      - mysql-data:/var/lib/mysql
+    networks:
+      - trino-net
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Trino ─────────────────────────────────────────────────────────
+  trino:
+    image: "trinodb/trino:424"
+    container_name: trino
+    hostname: trino
+    ports:
+      - "8090:8080"
+    volumes:
+      - ./mcp-trino/trino-conf/catalog:/etc/trino/catalog
+      - ./mcp-trino/trino-conf/access-control.properties:/etc/trino/access-control.properties
+      - ./mcp-trino/trino-conf/rules.json:/etc/trino/rules.json
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - trino-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/v1/info"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Trino MCP Server ──────────────────────────────────────────────
+  trino-mcp:
+    build:
+      context: ./mcp-trino
+      dockerfile: Dockerfile
+    container_name: trino-mcp
+    ports:
+      - "6274:8080"
+    environment:
+      - TRINO_HOST=trino
+      - TRINO_PORT=8080
+      - TRINO_USER=trino
+      - TRINO_CATALOG=mysql
+      - TRINO_SCHEMA=demo
+      - TRINO_SCHEME=http
+      - MCP_TRANSPORT=http
+      - MCP_PORT=8080
+      # OAuth Azure AD
+      - OAUTH_ENABLED=true
+      - OAUTH_MODE=proxy
+      - OAUTH_PROVIDER=azure
+      - OIDC_ISSUER=https://sts.windows.net/0314c27a-7092-4151-8bbb-f71b64029748/
+      - OIDC_AUDIENCE=dd72be28-a3ed-4d76-a601-ffff997c1e42
+      - OIDC_CLIENT_ID=98af5baf-697b-49ac-a0c0-ab751818774e
+      - OIDC_CLIENT_SECRET=${AZURE_CLIENT_SECRET}
+      - OAUTH_REDIRECT_URI=http://localhost:6274/oauth/callback
+      - JWT_SECRET=${JWT_SECRET}
+      # Impersonation
+      - TRINO_ENABLE_IMPERSONATION=true
+      - TRINO_IMPERSONATION_FIELD=email
+    depends_on:
+      trino:
+        condition: service_healthy
+    networks:
+      - trino-net
+
+  # ── Auth Proxy ────────────────────────────────────────────────────
+  auth-proxy:
+    build:
+      context: ./auth-proxy
+      dockerfile: Dockerfile
+    container_name: auth-proxy
+    env_file:
+      - ./auth-proxy/.env
+    environment:
+      - UPSTREAM_URL=http://trino-mcp:8080/mcp
+    ports:
+      - "6275:6275"
+    volumes:
+      - auth-proxy-cache:/app/cache
+    depends_on:
+      - trino-mcp
+    networks:
+      - trino-net
+    restart: unless-stopped
+
+volumes:
+  mysql-data:
+  auth-proxy-cache:
+
+networks:
+  trino-net:
+    driver: bridge

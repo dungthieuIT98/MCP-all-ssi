@@ -1,0 +1,148 @@
+{
+  "dxt_version": "0.1",
+  "name": "mcp-trino",
+  "display_name": "Trino MCP Server",
+  "version": "1.5.0",
+  "description": "A high-performance Model Context Protocol (MCP) server that enables AI assistants to interact with Trino's distributed SQL query engine through standardized MCP tools",
+  "long_description": "This MCP server provides comprehensive access to Trino's distributed SQL query engine with features including:\n\n- Execute SQL queries with security restrictions\n- Discover catalogs, schemas, and tables\n- Retrieve table structure and column information\n- SSL/TLS support for secure connections\n- Configurable query timeouts\n- Cross-platform binaries for macOS, Windows, and Linux\n\nCompatible with Claude Desktop, Cursor, Windsurf, ChatWise, and any MCP-compatible clients.",
+  "author": {
+    "name": "Tommy Nguyen"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tuannvm/mcp-trino"
+  },
+  "homepage": "https://github.com/tuannvm/mcp-trino",
+  "documentation": "https://github.com/tuannvm/mcp-trino/blob/main/README.md",
+  "support": "https://github.com/tuannvm/mcp-trino/issues",
+  "license": "MIT",
+  "compatibility": {
+    "claude_desktop": ">=0.10.0",
+    "platforms": ["darwin", "win32", "linux"]
+  },
+  "server": {
+    "type": "binary",
+    "entry_point": "server/mcp-trino-darwin-arm64",
+    "mcp_config": {
+      "command": "sh",
+      "args": ["-c", "chmod +x \"${__dirname}/server/mcp-trino-darwin-arm64\" && \"${__dirname}/server/mcp-trino-darwin-arm64\""],
+      "env": {
+        "TRINO_HOST": "${user_config.trino_host}",
+        "TRINO_PORT": "${user_config.trino_port}",
+        "TRINO_USER": "${user_config.trino_user}",
+        "TRINO_PASSWORD": "${user_config.trino_password}",
+        "TRINO_SCHEME": "${user_config.trino_scheme}",
+        "TRINO_SSL": "${user_config.trino_ssl}",
+        "TRINO_SSL_INSECURE": "${user_config.trino_ssl_insecure}",
+        "TRINO_ALLOW_WRITE_QUERIES": "${user_config.trino_allow_write_queries}",
+        "TRINO_QUERY_TIMEOUT": "${user_config.trino_query_timeout}"
+      },
+      "platforms": {
+        "win32": {
+          "command": "${__dirname}/server/mcp-trino-windows-amd64.exe"
+        },
+        "linux": {
+          "command": "sh",
+          "args": ["-c", "chmod +x \"${__dirname}/server/mcp-trino-linux-amd64\" && \"${__dirname}/server/mcp-trino-linux-amd64\""]
+        }
+      }
+    }
+  },
+  "user_config": {
+    "trino_host": {
+      "type": "string",
+      "title": "Trino Host",
+      "description": "Trino server hostname",
+      "default": "localhost",
+      "required": true
+    },
+    "trino_port": {
+      "type": "string",
+      "title": "Trino Port",
+      "description": "Trino server port",
+      "default": "8080",
+      "required": true
+    },
+    "trino_user": {
+      "type": "string",
+      "title": "Trino Username", 
+      "description": "Trino username",
+      "default": "trino",
+      "required": true
+    },
+    "trino_password": {
+      "type": "string",
+      "title": "Trino Password",
+      "description": "Trino password (leave empty if not required)",
+      "default": "",
+      "sensitive": true,
+      "required": false
+    },
+    "trino_scheme": {
+      "type": "string",
+      "title": "Connection Scheme",
+      "description": "Connection scheme (http/https)",
+      "default": "https",
+      "required": false
+    },
+    "trino_ssl": {
+      "type": "string",
+      "title": "Enable SSL",
+      "description": "Enable SSL connection",
+      "default": "true",
+      "required": false
+    },
+    "trino_ssl_insecure": {
+      "type": "string",
+      "title": "Allow Insecure SSL",
+      "description": "Allow insecure SSL connections",
+      "default": "true",
+      "required": false
+    },
+    "trino_allow_write_queries": {
+      "type": "string",
+      "title": "Allow Write Queries",
+      "description": "Allow non-read-only SQL queries",
+      "default": "false",
+      "required": false
+    },
+    "trino_query_timeout": {
+      "type": "string",
+      "title": "Query Timeout",
+      "description": "Query timeout in seconds",
+      "default": "30",
+      "required": false
+    }
+  },
+  "tools": [
+    {
+      "name": "execute_query",
+      "description": "Execute SQL queries against Trino with security restrictions"
+    },
+    {
+      "name": "list_catalogs",
+      "description": "Discover available data catalogs"
+    },
+    {
+      "name": "list_schemas", 
+      "description": "List schemas within catalogs"
+    },
+    {
+      "name": "list_tables",
+      "description": "List tables within schemas"
+    },
+    {
+      "name": "get_table_schema",
+      "description": "Retrieve table structure and column information"
+    }
+  ],
+  "features": [
+    "STDIO and HTTP transport support",
+    "Server-Sent Events (SSE) for web clients",
+    "SQL injection protection with read-only enforcement",
+    "Configurable query timeouts",
+    "SSL/TLS support for secure connections",
+    "Multi-platform binary support",
+    "Docker container support"
+  ]
+}

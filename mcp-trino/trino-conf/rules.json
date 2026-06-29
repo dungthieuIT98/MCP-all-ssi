@@ -1,0 +1,8 @@
+{
+  "catalogs": [
+    {
+      "catalog": ".*",
+      "allow": "read-only"
+    }
+  ]
+}

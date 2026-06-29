@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "deny": [
+      "Bash(trino*)",
+      "Bash(mysql*)",
+      "Bash(psql*)",
+      "PowerShell(Invoke-Sql*)"
+    ]
+  }
+}

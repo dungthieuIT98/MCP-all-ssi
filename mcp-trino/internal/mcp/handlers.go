@@ -1,0 +1,355 @@
+package mcp
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"log"
+
+	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/mark3labs/mcp-go/server"
+	"github.com/tuannvm/mcp-trino/internal/config"
+	oauth "github.com/tuannvm/oauth-mcp-proxy"
+	"github.com/tuannvm/mcp-trino/internal/trino"
+)
+
+// TrinoHandlers contains all handlers for Trino-related tools
+type TrinoHandlers struct {
+	TrinoClient *trino.Client
+	Config      *config.TrinoConfig
+}
+
+// NewTrinoHandlers creates a new set of Trino handlers
+func NewTrinoHandlers(client *trino.Client, cfg *config.TrinoConfig) *TrinoHandlers {
+	return &TrinoHandlers{
+		TrinoClient: client,
+		Config:      cfg,
+	}
+}
+
+// prepareImpersonationContext adds impersonated user to context
+func (h *TrinoHandlers) prepareImpersonationContext(ctx context.Context) context.Context {
+	user, ok := oauth.GetUserFromContext(ctx)
+	if !ok || user == nil {
+		log.Printf("[impersonate] no OAuth user found in context — skipping impersonation")
+		return ctx
+	}
+
+	log.Printf("[impersonate] OAuth user from context: subject=%q email=%q username=%q",
+		user.Subject, user.Email, user.Username)
+
+	var principal string
+	switch h.Config.ImpersonationField {
+	case "email":
+		principal = user.Email
+	case "subject":
+		principal = user.Subject
+	case "username":
+		fallthrough
+	default:
+		principal = user.Username
+	}
+
+	log.Printf("[impersonate] ImpersonationField=%q → principal=%q", h.Config.ImpersonationField, principal)
+
+	if principal != "" {
+		log.Printf("[impersonate] X-Trino-User will be set to %q on Trino requests", principal)
+		return trino.WithImpersonatedUser(ctx, principal)
+	}
+
+	log.Printf("[impersonate] WARNING: field %q is empty — impersonation skipped, Trino will use default user", h.Config.ImpersonationField)
+	return ctx
+}
+
+// ExecuteQuery handles query execution
+func (h *TrinoHandlers) ExecuteQuery(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+    if h.Config.EnableImpersonation {
+        ctx = h.prepareImpersonationContext(ctx)
+    }
+
+	// Type assert Arguments to map[string]interface{}
+	args, ok := request.Params.Arguments.(map[string]interface{})
+	if !ok {
+		mcpErr := fmt.Errorf("invalid arguments format")
+		return mcp.NewToolResultErrorFromErr(mcpErr.Error(), mcpErr), nil
+	}
+
+	// Extract the query parameter
+	query, ok := args["query"].(string)
+	if !ok {
+		mcpErr := fmt.Errorf("query parameter must be a string")
+		return mcp.NewToolResultErrorFromErr(mcpErr.Error(), mcpErr), nil
+	}
+
+	// Execute the query - SQL injection protection is handled within the client
+	qr, err := h.TrinoClient.ExecuteQueryWithContext(ctx, query)
+	if err != nil {
+		log.Printf("Error executing query: %v", err)
+		mcpErr := fmt.Errorf("query execution failed: %w", err)
+		return mcp.NewToolResultErrorFromErr(mcpErr.Error(), mcpErr), nil
+	}
+
+	// Build the bare JSON array as backward-compatible text content
+	// This preserves the original response format for older MCP clients
+	jsonData, err := json.MarshalIndent(qr.Rows, "", "  ")
+	if err != nil {
+		mcpErr := fmt.Errorf("failed to marshal results to JSON: %w", err)
+		return mcp.NewToolResultErrorFromErr(mcpErr.Error(), mcpErr), nil
+	}
+
+	// If truncated, use structuredContent (MCP 2025-06-18) for metadata
+	// while keeping the bare array in text content for backward compatibility
+	if qr.Truncated {
+		structured := map[string]interface{}{
+			"results":   qr.Rows,
+			"truncated": true,
+			"rowCount":  len(qr.Rows),
+			"message":   fmt.Sprintf("Result truncated to %d rows. Add LIMIT to your query or increase TRINO_MAX_ROWS.", qr.MaxRows),
+		}
+		return mcp.NewToolResultStructured(structured, string(jsonData)), nil
+	}
+
+	return mcp.NewToolResultText(string(jsonData)), nil
+}
+
+// ListCatalogs handles catalog listing
+func (h *TrinoHandlers) ListCatalogs(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.Config.EnableImpersonation {
+		ctx = h.prepareImpersonationContext(ctx)
+	}
+
+	catalogs, err := h.TrinoClient.ListCatalogsWithContext(ctx)
+	if err != nil {
+		log.Printf("Error listing catalogs: %v", err)
+		mcpErr := fmt.Errorf("failed to list catalogs: %w", err)
+		return mcp.NewToolResultErrorFromErr(mcpErr.Error(), mcpErr), nil
+	}
+
+	// Convert catalogs to JSON string for display
+	jsonData, err := json.MarshalIndent(catalogs, "", "  ")
+	if err != nil {
+		mcpErr := fmt.Errorf("failed to marshal catalogs to JSON: %w", err)
+		return mcp.NewToolResultErrorFromErr(mcpErr.Error(), mcpErr), nil
+	}
+
+	return mcp.NewToolResultText(string(jsonData)), nil
+}
+
+// ListSchemas handles schema listing
+func (h *TrinoHandlers) ListSchemas(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.Config.EnableImpersonation {
+		ctx = h.prepareImpersonationContext(ctx)
+	}
+
+	// Type assert Arguments to map[string]interface{}
+	args, ok := request.Params.Arguments.(map[string]interface{})
+	if !ok {
+		mcpErr := fmt.Errorf("invalid arguments format")
+		return mcp.NewToolResultErrorFromErr(mcpErr.Error(), mcpErr), nil
+	}
+
+	// Extract catalog parameter (optional)
+	var catalog string
+	if catalogParam, ok := args["catalog"].(string); ok {
+		catalog = catalogParam
+	}
+
+	schemas, err := h.TrinoClient.ListSchemasWithContext(ctx, catalog)
+	if err != nil {
+		log.Printf("Error listing schemas: %v", err)
+		mcpErr := fmt.Errorf("failed to list schemas: %w", err)
+		return mcp.NewToolResultErrorFromErr(mcpErr.Error(), mcpErr), nil
+	}
+
+	// Convert schemas to JSON string for display
+	jsonData, err := json.MarshalIndent(schemas, "", "  ")
+	if err != nil {
+		mcpErr := fmt.Errorf("failed to marshal schemas to JSON: %w", err)
+		return mcp.NewToolResultErrorFromErr(mcpErr.Error(), mcpErr), nil
+	}
+
+	return mcp.NewToolResultText(string(jsonData)), nil
+}
+
+// ListTables handles table listing
+func (h *TrinoHandlers) ListTables(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.Config.EnableImpersonation {
+		ctx = h.prepareImpersonationContext(ctx)
+	}
+
+	// Type assert Arguments to map[string]interface{}
+	args, ok := request.Params.Arguments.(map[string]interface{})
+	if !ok {
+		mcpErr := fmt.Errorf("invalid arguments format")
+		return mcp.NewToolResultErrorFromErr(mcpErr.Error(), mcpErr), nil
+	}
+
+	// Extract catalog and schema parameters (optional)
+	var catalog, schema string
+	if catalogParam, ok := args["catalog"].(string); ok {
+		catalog = catalogParam
+	}
+	if schemaParam, ok := args["schema"].(string); ok {
+		schema = schemaParam
+	}
+
+	tables, err := h.TrinoClient.ListTablesWithContext(ctx, catalog, schema)
+	if err != nil {
+		log.Printf("Error listing tables: %v", err)
+		mcpErr := fmt.Errorf("failed to list tables: %w", err)
+		return mcp.NewToolResultErrorFromErr(mcpErr.Error(), mcpErr), nil
+	}
+
+	// Convert tables to JSON string for display
+	jsonData, err := json.MarshalIndent(tables, "", "  ")
+	if err != nil {
+		mcpErr := fmt.Errorf("failed to marshal tables to JSON: %w", err)
+		return mcp.NewToolResultErrorFromErr(mcpErr.Error(), mcpErr), nil
+	}
+
+	return mcp.NewToolResultText(string(jsonData)), nil
+}
+
+// GetTableSchema handles table schema retrieval
+func (h *TrinoHandlers) GetTableSchema(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.Config.EnableImpersonation {
+		ctx = h.prepareImpersonationContext(ctx)
+	}
+
+	// Type assert Arguments to map[string]interface{}
+	args, ok := request.Params.Arguments.(map[string]interface{})
+	if !ok {
+		mcpErr := fmt.Errorf("invalid arguments format")
+		return mcp.NewToolResultErrorFromErr(mcpErr.Error(), mcpErr), nil
+	}
+
+	// Extract parameters
+	var catalog, schema string
+	var table string
+
+	if catalogParam, ok := args["catalog"].(string); ok {
+		catalog = catalogParam
+	}
+	if schemaParam, ok := args["schema"].(string); ok {
+		schema = schemaParam
+	}
+
+	// Table parameter is required
+	tableParam, ok := args["table"].(string)
+	if !ok {
+		mcpErr := fmt.Errorf("table parameter is required")
+		return mcp.NewToolResultErrorFromErr(mcpErr.Error(), mcpErr), nil
+	}
+	table = tableParam
+
+	qr, err := h.TrinoClient.GetTableSchemaWithContext(ctx, catalog, schema, table)
+	if err != nil {
+		log.Printf("Error getting table schema: %v", err)
+		mcpErr := fmt.Errorf("failed to get table schema: %w", err)
+		return mcp.NewToolResultErrorFromErr(mcpErr.Error(), mcpErr), nil
+	}
+
+	// Convert table schema to JSON string for display
+	jsonData, err := json.MarshalIndent(qr.Rows, "", "  ")
+	if err != nil {
+		mcpErr := fmt.Errorf("failed to marshal table schema to JSON: %w", err)
+		return mcp.NewToolResultErrorFromErr(mcpErr.Error(), mcpErr), nil
+	}
+
+	return mcp.NewToolResultText(string(jsonData)), nil
+}
+
+// ExplainQuery handles query plan analysis
+func (h *TrinoHandlers) ExplainQuery(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.Config.EnableImpersonation {
+		ctx = h.prepareImpersonationContext(ctx)
+	}
+
+	// Type assert Arguments to map[string]interface{}
+	args, ok := request.Params.Arguments.(map[string]interface{})
+	if !ok {
+		mcpErr := fmt.Errorf("invalid arguments format")
+		return mcp.NewToolResultErrorFromErr(mcpErr.Error(), mcpErr), nil
+	}
+
+	// Extract the query parameter
+	query, ok := args["query"].(string)
+	if !ok {
+		mcpErr := fmt.Errorf("query parameter must be a string")
+		return mcp.NewToolResultErrorFromErr(mcpErr.Error(), mcpErr), nil
+	}
+
+	// Extract optional format parameter
+	var format string
+	if formatParam, ok := args["format"].(string); ok {
+		format = formatParam
+	}
+
+	// Execute the explain query
+	qr, err := h.TrinoClient.ExplainQueryWithContext(ctx, query, format)
+	if err != nil {
+		log.Printf("Error explaining query: %v", err)
+		mcpErr := fmt.Errorf("query explanation failed: %w", err)
+		return mcp.NewToolResultErrorFromErr(mcpErr.Error(), mcpErr), nil
+	}
+
+	// Convert results to JSON string for display
+	jsonData, err := json.MarshalIndent(qr.Rows, "", "  ")
+	if err != nil {
+		mcpErr := fmt.Errorf("failed to marshal explanation results to JSON: %w", err)
+		return mcp.NewToolResultErrorFromErr(mcpErr.Error(), mcpErr), nil
+	}
+
+	return mcp.NewToolResultText(string(jsonData)), nil
+}
+
+// RegisterTrinoTools registers all Trino-related tools with the MCP server.
+// OAuth middleware is applied server-wide via WithToolHandlerMiddleware(),
+// so no per-tool middleware application needed.
+func RegisterTrinoTools(m *server.MCPServer, h *TrinoHandlers) {
+
+	m.AddTool(mcp.NewTool("execute_query",
+		mcp.WithDescription("Execute SQL queries on Trino's fast distributed query engine for big data analytics. By default, only read-only queries (SELECT, SHOW, DESCRIBE, EXPLAIN) are allowed for security. When TRINO_ALLOW_WRITE_QUERIES=true is set, supports all SQL statements including INSERT, UPDATE, DELETE, CREATE, DROP, and other DML/DDL operations. Perfect for complex analytics, aggregations, joins, and cross-system data exploration on large datasets."),
+		mcp.WithTitleAnnotation("Execute Query"),
+		mcp.WithDestructiveHintAnnotation(true),
+		mcp.WithString("query", mcp.Required(), mcp.Description("SQL query to execute. By default read-only queries only; DML/DDL requires TRINO_ALLOW_WRITE_QUERIES=true")),
+	), h.ExecuteQuery)
+
+	m.AddTool(mcp.NewTool("list_catalogs",
+		mcp.WithDescription("Discover available Trino catalogs - each catalog represents a connector to different data systems (PostgreSQL, MySQL, S3, HDFS, Kafka, etc.). Catalogs are your entry point to querying data across heterogeneous systems in a single SQL query."),
+		mcp.WithTitleAnnotation("List Catalogs"),
+		mcp.WithReadOnlyHintAnnotation(true)),
+		h.ListCatalogs)
+
+	m.AddTool(mcp.NewTool("list_schemas",
+		mcp.WithDescription("Browse schemas (databases/namespaces) within a Trino catalog. Each schema contains related tables and views. Use this to navigate the data hierarchy before querying specific datasets."),
+		mcp.WithTitleAnnotation("List Schemas"),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithString("catalog", mcp.Description("Trino catalog name (optional; defaults to server configuration if omitted)"))),
+		h.ListSchemas)
+
+	m.AddTool(mcp.NewTool("list_tables",
+		mcp.WithDescription("Discover tables and views available for querying in Trino schemas. Essential for finding datasets to analyze. Can scope to specific catalog/schema or browse all available data across the distributed system."),
+		mcp.WithTitleAnnotation("List Tables"),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithString("catalog", mcp.Description("Trino catalog name (optional)")),
+		mcp.WithString("schema", mcp.Description("Schema name within catalog (optional)"))),
+		h.ListTables)
+
+	m.AddTool(mcp.NewTool("get_table_schema",
+		mcp.WithDescription("Inspect table structure and column metadata from Trino's distributed data sources. Shows column names, data types, nullability, and constraints. Critical for understanding data before writing analytical queries."),
+		mcp.WithTitleAnnotation("Get Table Schema"),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithString("catalog", mcp.Description("Trino catalog containing the table (optional)")),
+		mcp.WithString("schema", mcp.Description("Schema containing the table (optional)")),
+		mcp.WithString("table", mcp.Required(), mcp.Description("Table name to inspect"))),
+		h.GetTableSchema)
+
+	m.AddTool(mcp.NewTool("explain_query",
+		mcp.WithDescription("Analyze Trino query execution plans without running expensive queries. Shows distributed execution stages, data movement between nodes, and resource estimates. Essential for query optimization and performance tuning."),
+		mcp.WithTitleAnnotation("Explain Query"),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithString("query", mcp.Required(), mcp.Description("SQL query to analyze (SELECT, JOIN, aggregations, etc.)")),
+		mcp.WithString("format", mcp.Description("Plan type: LOGICAL, DISTRIBUTED, VALIDATE, or IO (optional)"))),
+		h.ExplainQuery)
+}

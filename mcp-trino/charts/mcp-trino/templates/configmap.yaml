@@ -1,0 +1,49 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "mcp-trino.fullname" . }}
+  labels:
+    {{- include "mcp-trino.labels" . | nindent 4 }}
+data:
+  TRINO_HOST: {{ .Values.trino.host | quote }}
+  TRINO_PORT: {{ .Values.trino.port | quote }}
+  TRINO_USER: {{ .Values.trino.user | quote }}
+  TRINO_CATALOG: {{ .Values.trino.catalog | quote }}
+  TRINO_SCHEMA: {{ .Values.trino.schema | quote }}
+  TRINO_SCHEME: {{ .Values.trino.scheme | quote }}
+  TRINO_SSL: {{ .Values.trino.ssl | quote }}
+  TRINO_SSL_INSECURE: {{ .Values.trino.sslInsecure | quote }}
+  TRINO_ALLOW_WRITE_QUERIES: {{ .Values.trino.allowWriteQueries | quote }}
+  TRINO_QUERY_TIMEOUT: {{ .Values.trino.queryTimeout | quote }}
+  MCP_TRANSPORT: {{ .Values.mcpServer.transport | quote }}
+  MCP_HOST: {{ .Values.mcpServer.host | quote }}
+  MCP_PORT: {{ .Values.mcpServer.port | quote }}
+  {{- if .Values.trino.allowlists.catalogs }}
+  TRINO_ALLOWED_CATALOGS: {{ .Values.trino.allowlists.catalogs | join "," | quote }}
+  {{- end }}
+  {{- if .Values.trino.allowlists.schemas }}
+  TRINO_ALLOWED_SCHEMAS: {{ .Values.trino.allowlists.schemas | join "," | quote }}
+  {{- end }}
+  {{- if .Values.trino.allowlists.tables }}
+  TRINO_ALLOWED_TABLES: {{ .Values.trino.allowlists.tables | join "," | quote }}
+  {{- end }}
+  OAUTH_ENABLED: {{ .Values.trino.oauth.enabled | quote }}
+  {{- if .Values.trino.oauth.enabled }}
+  OAUTH_MODE: {{ .Values.trino.oauth.mode | quote }}
+  OAUTH_PROVIDER: {{ .Values.trino.oauth.provider | quote }}
+  {{- if .Values.trino.oauth.redirectURIs }}
+  OAUTH_ALLOWED_REDIRECT_URIS: {{ .Values.trino.oauth.redirectURIs | quote }}
+  {{- end }}
+  {{- if .Values.trino.oauth.oidc.issuer }}
+  OIDC_ISSUER: {{ .Values.trino.oauth.oidc.issuer | quote }}
+  {{- end }}
+  {{- if .Values.trino.oauth.oidc.audience }}
+  OIDC_AUDIENCE: {{ .Values.trino.oauth.oidc.audience | quote }}
+  {{- end }}
+  {{- if .Values.trino.oauth.oidc.clientId }}
+  OIDC_CLIENT_ID: {{ .Values.trino.oauth.oidc.clientId | quote }}
+  {{- end }}
+  {{- if .Values.trino.oauth.oidc.clientSecret }}
+  OIDC_CLIENT_SECRET: {{ .Values.trino.oauth.oidc.clientSecret| quote }}
+  {{- end }}
+  {{- end }}
