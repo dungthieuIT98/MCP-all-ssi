@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "trino": {
+      "url": "http://localhost:6275/mcp",
+      "env": {
+        "TRINO_QUERY_CACHE_TTL": "60"
+      }
+    }
+  }
+}

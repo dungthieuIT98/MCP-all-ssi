@@ -12,7 +12,7 @@ The tool automatically detects which mode to use based on arguments and environm
 
 ## Tech Stack
 
-- **Language:** Go 1.24.11+
+- **Language:** Go 1.25.6+
 - **Key Dependencies:**
   - `github.com/mark3labs/mcp-go` v0.41.1 (MCP protocol)
   - `github.com/trinodb/trino-go-client` v0.328.0 (Trino client)
@@ -116,6 +116,7 @@ All tools return JSON-formatted responses and handle parameter validation:
 - `list_schemas`: List schemas within catalogs (optional catalog param)
 - `list_tables`: List tables within schemas (optional catalog/schema params)
 - `get_table_schema`: Retrieve table structure (required table param)
+- `sample_table`: Get schema + 5 sample rows + numeric stats (min/max/null_count) in one call
 - `explain_query`: Analyze query execution plans with optional format parameter
 
 ## Configuration
