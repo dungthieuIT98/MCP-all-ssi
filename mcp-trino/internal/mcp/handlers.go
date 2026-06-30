@@ -297,6 +297,26 @@ func (h *TrinoHandlers) ListTables(ctx context.Context, request mcp.CallToolRequ
 	return mcp.NewToolResultText(string(jsonData)), nil
 }
 
+// PingTrino handles Trino health check
+func (h *TrinoHandlers) PingTrino(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	result, err := h.TrinoClient.PingWithContext(ctx)
+	if err != nil {
+		// PingWithContext returns HealthResult with error field set, not Go error
+		// So we reach here only for unexpected errors
+		log.Printf("Unexpected error in PingTrino: %v", err)
+		mcpErr := fmt.Errorf("health check failed: %w", err)
+		return mcp.NewToolResultErrorFromErr(mcpErr.Error(), mcpErr), nil
+	}
+
+	jsonData, err := json.MarshalIndent(result, "", "  ")
+	if err != nil {
+		mcpErr := fmt.Errorf("failed to marshal health result: %w", err)
+		return mcp.NewToolResultErrorFromErr(mcpErr.Error(), mcpErr), nil
+	}
+
+	return mcp.NewToolResultText(string(jsonData)), nil
+}
+
 // GetTableSchema handles table schema retrieval
 func (h *TrinoHandlers) GetTableSchema(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	if h.Config.EnableImpersonation {
@@ -449,6 +469,12 @@ func RegisterTrinoTools(m *server.MCPServer, h *TrinoHandlers) {
 		mcp.WithTitleAnnotation("List Catalogs"),
 		mcp.WithReadOnlyHintAnnotation(true)),
 		h.ListCatalogs)
+
+	m.AddTool(mcp.NewTool("ping_trino",
+		mcp.WithDescription("Check Trino connectivity and responsiveness. Returns status, latency in milliseconds, and Trino version. Use this before running critical queries or when experiencing connection issues to verify the server is reachable. Timeout: 3 seconds."),
+		mcp.WithTitleAnnotation("Ping Trino"),
+		mcp.WithReadOnlyHintAnnotation(true)),
+		h.PingTrino)
 
 	m.AddTool(mcp.NewTool("list_schemas",
 		mcp.WithDescription("Browse schemas (databases/namespaces) within a Trino catalog. Each schema contains related tables and views. Use this to navigate the data hierarchy before querying specific datasets."),

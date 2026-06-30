@@ -2,6 +2,7 @@ package trino
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
 	"fmt"
 	"log"
@@ -9,6 +10,7 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/trinodb/trino-go-client/trino"
@@ -116,11 +118,18 @@ func (t *headerRoundTripper) RoundTrip(req *http.Request) (*http.Response, error
 	return resp, nil
 }
 
+// cacheEntry holds a cached query result with expiry.
+type cacheEntry struct {
+	result   *QueryResult
+	expireAt time.Time
+}
+
 // Client is a wrapper around Trino client
 type Client struct {
 	db      *sql.DB
 	config  *config.TrinoConfig
 	timeout time.Duration
+	cache   sync.Map // key: query hash (string), value: cacheEntry
 }
 
 // NewClient creates a new Trino client
@@ -336,9 +345,26 @@ func (c *Client) ExecuteQueryWithContext(ctx context.Context, query string) (*Qu
 	query = strings.TrimSuffix(strings.TrimSpace(query), ";")
 
 	// SQL injection protection: only allow read-only queries unless explicitly allowed in config
-	if !c.config.AllowWriteQueries && !isReadOnlyQuery(query) {
+	readOnly := isReadOnlyQuery(query)
+	if !c.config.AllowWriteQueries && !readOnly {
 		return nil, fmt.Errorf("security restriction: only SELECT, SHOW, DESCRIBE, and EXPLAIN queries are allowed. " +
 			"Set TRINO_ALLOW_WRITE_QUERIES=true to enable write operations (at your own risk)")
+	}
+
+	// Cache lookup: only for read-only queries when cache TTL is configured
+	cacheTTL := c.config.QueryCacheTTL
+	var cacheKey string
+	if cacheTTL > 0 && readOnly {
+		h := sha256.Sum256([]byte(query))
+		cacheKey = fmt.Sprintf("%x", h)
+		if v, ok := c.cache.Load(cacheKey); ok {
+			entry := v.(cacheEntry)
+			if time.Now().Before(entry.expireAt) {
+				log.Printf("[cache] hit for query hash %s", cacheKey[:8])
+				return entry.result, nil
+			}
+			c.cache.Delete(cacheKey)
+		}
 	}
 
 	// Create context with timeout, preserving any impersonation data
@@ -439,11 +465,18 @@ func (c *Client) ExecuteQueryWithContext(ctx context.Context, query string) (*Qu
 		}
 	}
 
-	return &QueryResult{
+	result := &QueryResult{
 		Rows:      results,
 		Truncated: truncated,
 		MaxRows:   maxRows,
-	}, nil
+	}
+
+	// Cache the result if TTL is configured and query was read-only
+	if cacheTTL > 0 && cacheKey != "" {
+		c.cache.Store(cacheKey, cacheEntry{result: result, expireAt: time.Now().Add(cacheTTL)})
+	}
+
+	return result, nil
 }
 
 // ListCatalogs returns a list of available catalogs
@@ -540,6 +573,52 @@ func (c *Client) ListTablesWithContext(ctx context.Context, catalog, schema stri
 	return tables, nil
 }
 
+// HealthResult holds the result of a Trino health check.
+type HealthResult struct {
+	Status       string `json:"status"`
+	LatencyMs    int64  `json:"latency_ms,omitempty"`
+	TrinoVersion string `json:"trino_version,omitempty"`
+	Error        string `json:"error,omitempty"`
+}
+
+// Ping checks Trino connectivity with a short timeout.
+func (c *Client) Ping() (*HealthResult, error) {
+	return c.PingWithContext(context.Background())
+}
+
+// PingWithContext checks Trino connectivity with context and returns latency + version.
+func (c *Client) PingWithContext(ctx context.Context) (*HealthResult, error) {
+	// Use a short timeout for health check
+	checkCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+
+	start := time.Now()
+	result, err := c.ExecuteQueryWithContext(checkCtx, "SELECT 1")
+	latency := time.Since(start).Milliseconds()
+
+	if err != nil {
+		return &HealthResult{
+			Status: "error",
+			LatencyMs: latency,
+			Error: err.Error(),
+		}, nil
+	}
+
+	// Try to get Trino version
+	var trinoVersion string
+	if len(result.Rows) > 0 {
+		if v, ok := result.Rows[0]["_col0"].(int64); ok {
+			trinoVersion = fmt.Sprintf("%d", v)
+		}
+	}
+
+	return &HealthResult{
+		Status:       "ok",
+		LatencyMs:    latency,
+		TrinoVersion: trinoVersion,
+	}, nil
+}
+
 // GetTableSchema returns the schema of a table
 func (c *Client) GetTableSchema(catalog, schema, table string) (*QueryResult, error) {
 	return c.GetTableSchemaWithContext(context.Background(), catalog, schema, table)
@@ -581,6 +660,197 @@ func (c *Client) GetTableSchemaWithContext(ctx context.Context, catalog, schema,
 	// Build and execute query with resolved parameters
 	query := fmt.Sprintf("DESCRIBE %s.%s.%s", catalog, schema, table)
 	return c.ExecuteQueryWithContext(ctx, query)
+}
+
+// ColumnInfo holds metadata for a single column from DESCRIBE output.
+type ColumnInfo struct {
+	Name    string `json:"name"`
+	Type    string `json:"type"`
+	Null    string `json:"null,omitempty"`
+	Comment string `json:"comment,omitempty"`
+}
+
+// ColumnStats holds min/max/null_count for a numeric column.
+type ColumnStats struct {
+	Min       interface{} `json:"min"`
+	Max       interface{} `json:"max"`
+	NullCount int64       `json:"null_count"`
+}
+
+// SampleResult is the combined output of SampleTableWithContext.
+type SampleResult struct {
+	Columns []ColumnInfo               `json:"columns"`
+	Sample  []map[string]interface{}   `json:"sample"`
+	Stats   map[string]*ColumnStats    `json:"stats,omitempty"`
+}
+
+// numericTypes is the set of Trino type prefixes considered numeric for stats.
+var numericTypes = []string{
+	"bigint", "integer", "int", "smallint", "tinyint",
+	"double", "real", "decimal", "numeric", "float",
+}
+
+func isNumericType(typeName string) bool {
+	lower := strings.ToLower(typeName)
+	for _, t := range numericTypes {
+		if strings.HasPrefix(lower, t) {
+			return true
+		}
+	}
+	return false
+}
+
+// SampleTable returns schema, sample rows, and numeric stats in one call.
+func (c *Client) SampleTable(catalog, schema, table string) (*SampleResult, error) {
+	return c.SampleTableWithContext(context.Background(), catalog, schema, table)
+}
+
+// SampleTableWithContext returns schema, sample rows, and numeric stats for a table.
+// It runs DESCRIBE and SELECT LIMIT 5 in parallel, then builds a stats query for
+// numeric columns — all in two round-trips total.
+func (c *Client) SampleTableWithContext(ctx context.Context, catalog, schema, table string) (*SampleResult, error) {
+	// Resolve fully-qualified name using the same logic as GetTableSchemaWithContext.
+	parts := strings.Split(table, ".")
+	switch len(parts) {
+	case 3:
+		catalog, schema, table = parts[0], parts[1], parts[2]
+	case 2:
+		schema, table = parts[0], parts[1]
+		if catalog == "" {
+			catalog = c.config.Catalog
+		}
+	default:
+		if catalog == "" {
+			catalog = c.config.Catalog
+		}
+		if schema == "" {
+			schema = c.config.Schema
+		}
+	}
+
+	if len(c.config.AllowedTables) > 0 && !c.isTableAllowed(catalog, schema, table) {
+		return nil, fmt.Errorf("table access denied: %s.%s.%s not in allowlist", catalog, schema, table)
+	}
+
+	qualifiedTable := fmt.Sprintf("%s.%s.%s", catalog, schema, table)
+
+	// Run DESCRIBE and SELECT LIMIT 5 in parallel.
+	type descResult struct {
+		rows []map[string]interface{}
+		err  error
+	}
+	type sampleResult struct {
+		rows []map[string]interface{}
+		err  error
+	}
+
+	descCh := make(chan descResult, 1)
+	sampleCh := make(chan sampleResult, 1)
+
+	go func() {
+		qr, err := c.ExecuteQueryWithContext(ctx, fmt.Sprintf("DESCRIBE %s", qualifiedTable))
+		if err != nil {
+			descCh <- descResult{err: err}
+			return
+		}
+		descCh <- descResult{rows: qr.Rows}
+	}()
+
+	go func() {
+		qr, err := c.ExecuteQueryWithContext(ctx, fmt.Sprintf("SELECT * FROM %s LIMIT 5", qualifiedTable))
+		if err != nil {
+			sampleCh <- sampleResult{err: err}
+			return
+		}
+		sampleCh <- sampleResult{rows: qr.Rows}
+	}()
+
+	dr := <-descCh
+	if dr.err != nil {
+		return nil, fmt.Errorf("DESCRIBE failed: %w", dr.err)
+	}
+	sr := <-sampleCh
+	if sr.err != nil {
+		return nil, fmt.Errorf("sample SELECT failed: %w", sr.err)
+	}
+
+	// Parse column metadata.
+	columns := make([]ColumnInfo, 0, len(dr.rows))
+	for _, row := range dr.rows {
+		col := ColumnInfo{}
+		if v, ok := row["Column"].(string); ok {
+			col.Name = v
+		}
+		if v, ok := row["Type"].(string); ok {
+			col.Type = v
+		}
+		if v, ok := row["Null"].(string); ok {
+			col.Null = v
+		}
+		if v, ok := row["Comment"].(string); ok {
+			col.Comment = v
+		}
+		columns = append(columns, col)
+	}
+
+	// Build stats query for numeric columns only.
+	var statsParts []string
+	var numericCols []string
+	for _, col := range columns {
+		if !isNumericType(col.Type) {
+			continue
+		}
+		// Column names from DESCRIBE are trusted (not user input), safe to interpolate.
+		quoted := fmt.Sprintf(`"%s"`, strings.ReplaceAll(col.Name, `"`, `""`))
+		statsParts = append(statsParts,
+			fmt.Sprintf("MIN(%s), MAX(%s), COUNT(CASE WHEN %s IS NULL THEN 1 END)", quoted, quoted, quoted),
+		)
+		numericCols = append(numericCols, col.Name)
+	}
+
+	var stats map[string]*ColumnStats
+	if len(statsParts) > 0 {
+		statsQuery := fmt.Sprintf("SELECT %s FROM %s", strings.Join(statsParts, ", "), qualifiedTable)
+		sqr, err := c.ExecuteQueryWithContext(ctx, statsQuery)
+		if err != nil {
+			log.Printf("[sample_table] stats query failed (non-fatal): %v", err)
+		} else if len(sqr.Rows) == 1 {
+			stats = make(map[string]*ColumnStats, len(numericCols))
+			row := sqr.Rows[0]
+			// Column names returned by Trino for SELECT MIN(x), MAX(x), COUNT(...) are positional,
+			// so we match by index: 3 values per numeric column.
+			keys := make([]string, 0, len(row))
+			for k := range row {
+				keys = append(keys, k)
+			}
+			// Trino returns columns in declaration order; iterate numericCols by index.
+			for i, colName := range numericCols {
+				minKey := fmt.Sprintf("_col%d", i*3)
+				maxKey := fmt.Sprintf("_col%d", i*3+1)
+				nullKey := fmt.Sprintf("_col%d", i*3+2)
+				_ = keys
+				cs := &ColumnStats{
+					Min: row[minKey],
+					Max: row[maxKey],
+				}
+				if v, ok := row[nullKey]; ok && v != nil {
+					switch n := v.(type) {
+					case int64:
+						cs.NullCount = n
+					case float64:
+						cs.NullCount = int64(n)
+					}
+				}
+				stats[colName] = cs
+			}
+		}
+	}
+
+	return &SampleResult{
+		Columns: columns,
+		Sample:  sr.rows,
+		Stats:   stats,
+	}, nil
 }
 
 // ExplainQuery returns the query execution plan for a given SQL query

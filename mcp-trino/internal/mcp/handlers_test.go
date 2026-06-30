@@ -17,9 +17,11 @@ import (
 var expectedTools = []string{
 	"execute_query",
 	"list_catalogs",
+	"ping_trino",
 	"list_schemas",
 	"list_tables",
 	"get_table_schema",
+	"sample_table",
 	"explain_query",
 }
 
@@ -32,7 +34,7 @@ func newTestHandlers(cfg *config.TrinoConfig) *TrinoHandlers {
 	}
 }
 
-// TestRegisterTrinoTools_AllToolsRegistered verifies that all 6 tools are
+// TestRegisterTrinoTools_AllToolsRegistered verifies that all 7 tools are
 // registered on the MCP server and can be listed via the JSON-RPC protocol.
 func TestRegisterTrinoTools_AllToolsRegistered(t *testing.T) {
 	srv := mcpserver.NewMCPServer("test-server", "0.0.1", mcpserver.WithToolCapabilities(true))
