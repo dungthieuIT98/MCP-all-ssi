@@ -107,6 +107,10 @@ func main() {
 func runMCPServer() {
 	log.Println("Starting Trino MCP Server...")
 
+	// Cleanup old temp result files
+	log.Println("Cleaning up old temp result files...")
+	mcp.CleanupTempResults()
+
 	// Initialize Trino configuration
 	log.Println("Loading Trino configuration...")
 	trinoConfig, err := config.NewTrinoConfigWithVersion(Version)

@@ -49,6 +49,12 @@ type TrinoConfig struct {
 
 	// Query attribution
 	TrinoSource string // Value for X-Trino-Source header (identifies query source to Trino)
+
+	// Query result cache
+	QueryCacheTTL time.Duration // TTL for read-only query result cache (0 = disabled)
+
+	// Preview and pagination
+	MaxPreviewRows    int // Maximum rows to return inline (excess written to temp file, default 20)
 }
 
 // NewTrinoConfig creates a new TrinoConfig with values from environment variables or defaults
@@ -200,6 +206,34 @@ func NewTrinoConfigWithVersion(version string) (*TrinoConfig, error) {
 	// Log query attribution configuration
 	log.Printf("INFO: Trino query source attribution: %s", trinoSource)
 
+	// Parse query cache TTL (0 = disabled by default)
+	cacheTTLStr := resolveEnv("TRINO_QUERY_CACHE_TTL", "0")
+	cacheTTLInt, err := strconv.Atoi(cacheTTLStr)
+	switch {
+	case err != nil:
+		log.Printf("WARNING: Invalid TRINO_QUERY_CACHE_TTL '%s': not an integer. Cache disabled.", cacheTTLStr)
+		cacheTTLInt = 0
+	case cacheTTLInt < 0:
+		log.Printf("WARNING: Invalid TRINO_QUERY_CACHE_TTL '%d': must be non-negative. Cache disabled.", cacheTTLInt)
+		cacheTTLInt = 0
+	case cacheTTLInt > 0:
+		log.Printf("INFO: Query result cache enabled with TTL=%ds (TRINO_QUERY_CACHE_TTL)", cacheTTLInt)
+	}
+	queryCacheTTL := time.Duration(cacheTTLInt) * time.Second
+
+	// Parse max preview rows from environment variable
+	const defaultMaxPreviewRows = 20
+	maxPreviewRowsStr := resolveEnv("TRINO_MAX_PREVIEW_ROWS", strconv.Itoa(defaultMaxPreviewRows))
+	maxPreviewRows, err := strconv.Atoi(maxPreviewRowsStr)
+	switch {
+	case err != nil:
+		log.Printf("WARNING: Invalid TRINO_MAX_PREVIEW_ROWS '%s': not an integer. Using default of %d", maxPreviewRowsStr, defaultMaxPreviewRows)
+		maxPreviewRows = defaultMaxPreviewRows
+	case maxPreviewRows < 0:
+		log.Printf("WARNING: Invalid TRINO_MAX_PREVIEW_ROWS '%d': must be non-negative. Using default of %d", maxPreviewRows, defaultMaxPreviewRows)
+		maxPreviewRows = defaultMaxPreviewRows
+	}
+
 	return &TrinoConfig{
 		Host:                resolveEnv("TRINO_HOST", "localhost"),
 		Port:                port,
@@ -228,6 +262,8 @@ func NewTrinoConfigWithVersion(version string) (*TrinoConfig, error) {
 		EnableImpersonation: enableImpersonation,
 		ImpersonationField:  impersonationField,
 		TrinoSource:         trinoSource,
+		QueryCacheTTL:       queryCacheTTL,
+		MaxPreviewRows:      maxPreviewRows,
 	}, nil
 }
 

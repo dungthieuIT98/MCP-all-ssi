@@ -2,9 +2,12 @@ package mcp
 
 import (
 	"context"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
+	"path/filepath"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -24,6 +27,65 @@ func NewTrinoHandlers(client *trino.Client, cfg *config.TrinoConfig) *TrinoHandl
 	return &TrinoHandlers{
 		TrinoClient: client,
 		Config:      cfg,
+	}
+}
+
+// writeResultsToFile writes query results to a temporary CSV file and returns the file path.
+func writeResultsToFile(rows []map[string]interface{}) (string, error) {
+	if len(rows) == 0 {
+		return "", fmt.Errorf("no rows to write")
+	}
+
+	// Create temp file
+	f, err := os.CreateTemp("", "mcp-trino-results-*.csv")
+	if err != nil {
+		return "", fmt.Errorf("failed to create temp file: %w", err)
+	}
+	filePath := f.Name()
+	defer f.Close()
+
+	// Get column names from first row
+	var columns []string
+	for col := range rows[0] {
+		columns = append(columns, col)
+	}
+
+	writer := csv.NewWriter(f)
+	defer writer.Flush()
+
+	// Write header
+	if err := writer.Write(columns); err != nil {
+		return "", fmt.Errorf("failed to write CSV header: %w", err)
+	}
+
+	// Write rows
+	for _, row := range rows {
+		record := make([]string, len(columns))
+		for i, col := range columns {
+			if val, ok := row[col]; ok && val != nil {
+				record[i] = fmt.Sprintf("%v", val)
+			}
+		}
+		if err := writer.Write(record); err != nil {
+			return "", fmt.Errorf("failed to write CSV row: %w", err)
+		}
+	}
+
+	return filePath, nil
+}
+
+// CleanupTempResults removes old temp result files on startup.
+func CleanupTempResults() {
+	pattern := filepath.Join(os.TempDir(), "mcp-trino-results-*.csv")
+	matches, err := filepath.Glob(pattern)
+	if err != nil {
+		log.Printf("WARNING: failed to glob temp result files: %v", err)
+		return
+	}
+	for _, path := range matches {
+		if err := os.Remove(path); err != nil {
+			log.Printf("WARNING: failed to remove temp file %s: %v", path, err)
+		}
 	}
 }
 
@@ -95,6 +157,31 @@ func (h *TrinoHandlers) ExecuteQuery(ctx context.Context, request mcp.CallToolRe
 	if err != nil {
 		mcpErr := fmt.Errorf("failed to marshal results to JSON: %w", err)
 		return mcp.NewToolResultErrorFromErr(mcpErr.Error(), mcpErr), nil
+	}
+
+	// If there are more rows than MaxPreviewRows, write full results to temp file
+	// and return preview with file path
+	maxPreview := h.Config.MaxPreviewRows
+	if maxPreview > 0 && len(qr.Rows) > maxPreview {
+		filePath, err := writeResultsToFile(qr.Rows)
+		if err != nil {
+			log.Printf("WARNING: failed to write results to temp file: %v", err)
+			// Fall through to return preview only
+			structured := map[string]interface{}{
+				"results":   qr.Rows[:maxPreview],
+				"rowCount":  len(qr.Rows),
+				"file":      nil,
+				"message":   fmt.Sprintf("Result set has %d rows. Previewing first %d rows. Failed to write full results to file.", len(qr.Rows), maxPreview),
+			}
+			return mcp.NewToolResultStructured(structured, string(jsonData[:min(len(jsonData), 5000)])), nil
+		}
+		structured := map[string]interface{}{
+			"results":   qr.Rows[:maxPreview],
+			"rowCount":  len(qr.Rows),
+			"file":      filePath,
+			"message":   fmt.Sprintf("Result set has %d rows. Previewing first %d rows. Full results written to: %s", len(qr.Rows), maxPreview, filePath),
+		}
+		return mcp.NewToolResultStructured(structured, string(jsonData[:min(len(jsonData), 5000)])), nil
 	}
 
 	// If truncated, use structuredContent (MCP 2025-06-18) for metadata
@@ -259,6 +346,48 @@ func (h *TrinoHandlers) GetTableSchema(ctx context.Context, request mcp.CallTool
 	return mcp.NewToolResultText(string(jsonData)), nil
 }
 
+// SampleTable handles combined schema + sample + stats retrieval
+func (h *TrinoHandlers) SampleTable(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.Config.EnableImpersonation {
+		ctx = h.prepareImpersonationContext(ctx)
+	}
+
+	args, ok := request.Params.Arguments.(map[string]interface{})
+	if !ok {
+		mcpErr := fmt.Errorf("invalid arguments format")
+		return mcp.NewToolResultErrorFromErr(mcpErr.Error(), mcpErr), nil
+	}
+
+	tableParam, ok := args["table"].(string)
+	if !ok {
+		mcpErr := fmt.Errorf("table parameter is required")
+		return mcp.NewToolResultErrorFromErr(mcpErr.Error(), mcpErr), nil
+	}
+
+	var catalog, schema string
+	if v, ok := args["catalog"].(string); ok {
+		catalog = v
+	}
+	if v, ok := args["schema"].(string); ok {
+		schema = v
+	}
+
+	result, err := h.TrinoClient.SampleTableWithContext(ctx, catalog, schema, tableParam)
+	if err != nil {
+		log.Printf("Error sampling table: %v", err)
+		mcpErr := fmt.Errorf("failed to sample table: %w", err)
+		return mcp.NewToolResultErrorFromErr(mcpErr.Error(), mcpErr), nil
+	}
+
+	jsonData, err := json.MarshalIndent(result, "", "  ")
+	if err != nil {
+		mcpErr := fmt.Errorf("failed to marshal sample result to JSON: %w", err)
+		return mcp.NewToolResultErrorFromErr(mcpErr.Error(), mcpErr), nil
+	}
+
+	return mcp.NewToolResultText(string(jsonData)), nil
+}
+
 // ExplainQuery handles query plan analysis
 func (h *TrinoHandlers) ExplainQuery(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	if h.Config.EnableImpersonation {
@@ -344,6 +473,15 @@ func RegisterTrinoTools(m *server.MCPServer, h *TrinoHandlers) {
 		mcp.WithString("schema", mcp.Description("Schema containing the table (optional)")),
 		mcp.WithString("table", mcp.Required(), mcp.Description("Table name to inspect"))),
 		h.GetTableSchema)
+
+	m.AddTool(mcp.NewTool("sample_table",
+		mcp.WithDescription("Get a combined snapshot of a table in one call: column schema, 5 sample rows, and min/max/null_count stats for numeric columns. Best for: (1) understanding an unfamiliar table before writing queries, (2) checking actual data format and null rates, (3) validating filter ranges without separate queries. Replaces the need to call get_table_schema + execute_query(SELECT * LIMIT 5) + execute_query(SELECT MIN/MAX ...) separately."),
+		mcp.WithTitleAnnotation("Sample Table"),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithString("table", mcp.Required(), mcp.Description("Table name to sample. Accepts simple name, schema.table, or catalog.schema.table")),
+		mcp.WithString("catalog", mcp.Description("Trino catalog (optional, uses server default if omitted)")),
+		mcp.WithString("schema", mcp.Description("Schema containing the table (optional, uses server default if omitted)"))),
+		h.SampleTable)
 
 	m.AddTool(mcp.NewTool("explain_query",
 		mcp.WithDescription("Analyze Trino query execution plans without running expensive queries. Shows distributed execution stages, data movement between nodes, and resource estimates. Essential for query optimization and performance tuning."),
