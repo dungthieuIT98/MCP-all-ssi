@@ -77,6 +77,65 @@ services:
     networks:
       - trino-net
 
+  # ── Superset ──────────────────────────────────────────────────────
+  superset:
+    image: apache/superset:latest
+    container_name: superset
+    hostname: superset
+    ports:
+      - "8088:8088"
+    environment:
+      - SUPERSET_SECRET_KEY=${SUPERSET_SECRET_KEY:-supersetsecretkey}
+      - SUPERSET_ADMIN_USERNAME=${SUPERSET_ADMIN_USERNAME:-admin}
+      - SUPERSET_ADMIN_PASSWORD=${SUPERSET_ADMIN_PASSWORD:-admin}
+      - SUPERSET_ADMIN_EMAIL=${SUPERSET_ADMIN_EMAIL:-admin@superset.com}
+      - SUPERSET_CONFIG_PATH=/app/superset_home/superset_config.py
+      # Azure AD OAuth
+      - OAUTH_CLIENT_ID=${OIDC_CLIENT_ID}
+      - OAUTH_CLIENT_SECRET=${AZURE_CLIENT_SECRET}
+      - OAUTH_TENANT_ID=0314c27a-7092-4151-8bbb-f71b64029748
+    volumes:
+      - superset-data:/app/superset_home
+      - ./superset_config.py:/app/superset_home/superset_config.py
+    networks:
+      - trino-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8088/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+    command: >
+      sh -c "
+        superset db upgrade &&
+        superset fab create-admin
+          --username $$SUPERSET_ADMIN_USERNAME
+          --firstname Admin
+          --lastname User
+          --email $$SUPERSET_ADMIN_EMAIL
+          --password $$SUPERSET_ADMIN_PASSWORD 2>/dev/null || true &&
+        superset init &&
+        superset run -h 0.0.0.0 -p 8088
+      "
+
+  # ── Superset MCP ──────────────────────────────────────────────────
+  superset-mcp:
+    build:
+      context: ./mcp-superset
+      dockerfile: Dockerfile
+    container_name: superset-mcp
+    ports:
+      - "6276:8000"
+    environment:
+      - SUPERSET_BASE_URL=http://superset:8088
+      - SUPERSET_USERNAME=${SUPERSET_ADMIN_USERNAME:-admin}
+      - SUPERSET_PASSWORD=${SUPERSET_ADMIN_PASSWORD:-admin}
+    depends_on:
+      superset:
+        condition: service_healthy
+    networks:
+      - trino-net
+    restart: unless-stopped
+
   # ── Auth Proxy ────────────────────────────────────────────────────
   auth-proxy:
     build:
@@ -100,6 +159,7 @@ services:
 volumes:
   mysql-data:
   auth-proxy-cache:
+  superset-data:
 
 networks:
   trino-net:

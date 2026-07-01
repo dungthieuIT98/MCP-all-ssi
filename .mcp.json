@@ -1,7 +1,0 @@
-{
-  "mcpServers": {
-    "trino": {
-      "command": "c:\\.D\\data\\MCP\\stdio-wrapper\\mcp-trino-stdio.exe"
-    }
-  }
-}

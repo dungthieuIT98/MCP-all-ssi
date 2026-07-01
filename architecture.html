@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MCP Project Architecture</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0d1117;color:#e6edf3;font-family:'Segoe UI',system-ui,sans-serif;padding:24px}
+h1{text-align:center;font-size:1.8rem;background:linear-gradient(135deg,#58a6ff,#79c0ff);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:4px}
+.subtitle{text-align:center;color:#8b949e;font-size:.85rem;margin-bottom:28px}
+.section-title{font-size:1rem;font-weight:600;color:#79c0ff;border-bottom:1px solid #21262d;padding-bottom:6px;margin-bottom:14px;letter-spacing:.04em;text-transform:uppercase}
+/* DIAGRAM */
+.diagram-wrap{background:#161b22;border:1px solid #21262d;border-radius:12px;padding:20px;margin-bottom:24px;overflow-x:auto}
+svg{display:block;margin:0 auto}
+/* CARDS GRID */
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;margin-bottom:24px}
+.card{background:#161b22;border:1px solid #21262d;border-radius:10px;padding:16px;transition:border-color .2s}
+.card:hover{border-color:#388bfd}
+.card-header{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.badge{border-radius:5px;padding:2px 8px;font-size:.72rem;font-weight:700;letter-spacing:.03em}
+.go{background:#00add840;color:#00add8}.py{background:#3572a540;color:#4584b6}.docker{background:#2496ed40;color:#2496ed}
+.card h3{font-size:.95rem;font-weight:600}
+.card p{font-size:.8rem;color:#8b949e;line-height:1.5}
+.port{display:inline-block;background:#1f2937;border:1px solid #374151;border-radius:4px;padding:1px 6px;font-size:.72rem;font-family:monospace;color:#a3e635;margin:3px 2px 0 0}
+.tools-count{font-size:.78rem;color:#f0883e;margin-top:6px;font-weight:600}
+/* SECURITY */
+.sec-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-bottom:24px}
+.sec-item{background:#161b22;border:1px solid #21262d;border-radius:8px;padding:14px}
+.sec-item h4{font-size:.85rem;font-weight:600;color:#ff7b72;margin-bottom:6px}
+.sec-item p{font-size:.78rem;color:#8b949e;line-height:1.5}
+/* LEGEND */
+.legend{display:flex;flex-wrap:wrap;gap:14px;margin-bottom:6px}
+.leg{display:flex;align-items:center;gap:6px;font-size:.78rem;color:#8b949e}
+.leg-dot{width:12px;height:12px;border-radius:3px}
+</style>
+</head>
+<body>
+<h1>MCP Project Architecture</h1>
+<p class="subtitle">Multi-component Model Context Protocol infrastructure for Trino &amp; Superset</p>
+
+<div class="diagram-wrap">
+<p class="section-title" style="padding-left:4px">Data Flow Diagram</p>
+<svg width="820" height="400" viewBox="0 0 820 400" xmlns="http://www.w3.org/2000/svg">
+<defs>
+  <marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#388bfd"/></marker>
+  <marker id="arr2" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#f0883e"/></marker>
+  <marker id="arr3" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#3fb950"/></marker>
+  <filter id="glow"><feGaussianBlur stdDeviation="3" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+</defs>
+
+<!-- AI Clients -->
+<rect x="10" y="160" width="110" height="60" rx="8" fill="#1c2333" stroke="#388bfd" stroke-width="1.5" filter="url(#glow)"/>
+<text x="65" y="184" text-anchor="middle" fill="#79c0ff" font-size="12" font-weight="bold">AI Clients</text>
+<text x="65" y="200" text-anchor="middle" fill="#8b949e" font-size="10">Claude / Cursor</text>
+<text x="65" y="213" text-anchor="middle" fill="#8b949e" font-size="10">Windsurf / etc.</text>
+
+<!-- auth-proxy (center, gateway for both) -->
+<rect x="180" y="160" width="130" height="60" rx="8" fill="#1a1208" stroke="#f0883e" stroke-width="2"/>
+<text x="245" y="184" text-anchor="middle" fill="#f0883e" font-size="12" font-weight="bold">auth-proxy</text>
+<text x="245" y="199" text-anchor="middle" fill="#8b949e" font-size="10">Python/Starlette</text>
+<text x="245" y="213" text-anchor="middle" fill="#a3e635" font-size="10">:6275 · Azure AD</text>
+
+<!-- mcp-trino -->
+<rect x="380" y="80" width="130" height="70" rx="8" fill="#0d2137" stroke="#00add8" stroke-width="1.5"/>
+<text x="445" y="104" text-anchor="middle" fill="#00add8" font-size="12" font-weight="bold">mcp-trino</text>
+<text x="445" y="119" text-anchor="middle" fill="#8b949e" font-size="10">Go · HTTP</text>
+<text x="445" y="132" text-anchor="middle" fill="#a3e635" font-size="10">:8080 / :6274</text>
+<text x="445" y="145" text-anchor="middle" fill="#f0883e" font-size="10">7 tools</text>
+
+<!-- mcp-superset -->
+<rect x="380" y="230" width="130" height="65" rx="8" fill="#0d1f0d" stroke="#3fb950" stroke-width="1.5"/>
+<text x="445" y="254" text-anchor="middle" fill="#3fb950" font-size="12" font-weight="bold">mcp-superset</text>
+<text x="445" y="269" text-anchor="middle" fill="#8b949e" font-size="10">Python/FastMCP</text>
+<text x="445" y="284" text-anchor="middle" fill="#f0883e" font-size="10">30+ tools</text>
+
+<!-- Trino Engine -->
+<rect x="590" y="60" width="130" height="70" rx="8" fill="#1a1108" stroke="#f0883e" stroke-width="1.5" filter="url(#glow)"/>
+<text x="655" y="84" text-anchor="middle" fill="#f0883e" font-size="12" font-weight="bold">Trino Engine</text>
+<text x="655" y="99" text-anchor="middle" fill="#8b949e" font-size="10">Docker · :8090→8080</text>
+<text x="655" y="113" text-anchor="middle" fill="#a3e635" font-size="10">SQL Coordinator</text>
+
+<!-- Superset -->
+<rect x="590" y="230" width="130" height="65" rx="8" fill="#0d1f0d" stroke="#3fb950" stroke-width="1.5"/>
+<text x="655" y="256" text-anchor="middle" fill="#3fb950" font-size="12" font-weight="bold">Apache Superset</text>
+<text x="655" y="271" text-anchor="middle" fill="#8b949e" font-size="10">Docker · :8088</text>
+<text x="655" y="286" text-anchor="middle" fill="#8b949e" font-size="10">BI Platform</text>
+
+<!-- Data sources -->
+<rect x="590" y="140" width="55" height="36" rx="6" fill="#1a1208" stroke="#58a6ff" stroke-width="1.2"/>
+<text x="617" y="158" text-anchor="middle" fill="#58a6ff" font-size="10" font-weight="bold">MySQL</text>
+<text x="617" y="170" text-anchor="middle" fill="#a3e635" font-size="9">:3307</text>
+
+<rect x="660" y="140" width="60" height="36" rx="6" fill="#1c1a2e" stroke="#a371f7" stroke-width="1.2"/>
+<text x="690" y="158" text-anchor="middle" fill="#a371f7" font-size="10" font-weight="bold">Postgres</text>
+<text x="690" y="170" text-anchor="middle" fill="#8b949e" font-size="9">External</text>
+
+<rect x="590" y="186" width="55" height="34" rx="6" fill="#1c2219" stroke="#56d364" stroke-width="1.2"/>
+<text x="617" y="204" text-anchor="middle" fill="#56d364" font-size="10" font-weight="bold">BigQuery</text>
+<text x="617" y="216" text-anchor="middle" fill="#8b949e" font-size="9">GCP</text>
+
+<rect x="660" y="186" width="60" height="34" rx="6" fill="#1a1a1a" stroke="#8b949e" stroke-width="1.2"/>
+<text x="690" y="204" text-anchor="middle" fill="#8b949e" font-size="10" font-weight="bold">S3/Object</text>
+<text x="690" y="216" text-anchor="middle" fill="#8b949e" font-size="9">AWS/MinIO</text>
+
+<!-- Arrows: AI → auth-proxy (HTTP) -->
+<line x1="120" y1="190" x2="178" y2="190" stroke="#f0883e" stroke-width="2" marker-end="url(#arr2)"/>
+<text x="131" y="184" fill="#f0883e" font-size="9">HTTP</text>
+
+<!-- auth-proxy → mcp-trino -->
+<path d="M310,175 Q350,140 378,118" fill="none" stroke="#00add8" stroke-width="1.5" marker-end="url(#arr)"/>
+<text x="326" y="140" fill="#00add8" font-size="9">:6274</text>
+
+<!-- auth-proxy → mcp-superset -->
+<path d="M310,205 Q350,240 378,255" fill="none" stroke="#3fb950" stroke-width="1.5" marker-end="url(#arr3)"/>
+<text x="315" y="248" fill="#3fb950" font-size="9">:fastmcp</text>
+
+<!-- mcp-trino → Trino -->
+<line x1="512" y1="118" x2="588" y2="100" stroke="#00add8" stroke-width="1.5" marker-end="url(#arr)"/>
+<text x="525" y="104" fill="#00add8" font-size="9">SQL/REST</text>
+
+<!-- mcp-superset → Superset -->
+<line x1="512" y1="262" x2="588" y2="262" stroke="#3fb950" stroke-width="1.5" marker-end="url(#arr3)"/>
+<text x="523" y="256" fill="#3fb950" font-size="9">REST API</text>
+
+<!-- Trino → datasources -->
+<line x1="655" y1="132" x2="640" y2="140" stroke="#58a6ff" stroke-width="1.1" marker-end="url(#arr)"/>
+<line x1="668" y1="132" x2="680" y2="140" stroke="#a371f7" stroke-width="1.1" marker-end="url(#arr)"/>
+<line x1="640" y1="132" x2="625" y2="186" stroke="#56d364" stroke-width="1.1" marker-end="url(#arr)"/>
+<line x1="670" y1="132" x2="685" y2="186" stroke="#8b949e" stroke-width="1.1" marker-end="url(#arr)"/>
+
+<!-- Docker boundary -->
+<rect x="365" y="55" width="390" height="260" rx="10" fill="none" stroke="#21262d" stroke-width="1" stroke-dasharray="6,4"/>
+<text x="372" y="51" fill="#30363d" font-size="10">docker-compose (trino-net)</text>
+</svg>
+
+<div class="legend">
+  <div class="leg"><div class="leg-dot" style="background:#f0883e"></div>HTTP qua auth-proxy (Azure OIDC)</div>
+  <div class="leg"><div class="leg-dot" style="background:#00add8"></div>mcp-trino → Trino SQL</div>
+  <div class="leg"><div class="leg-dot" style="background:#3fb950"></div>mcp-superset → Superset REST</div>
+  <div class="leg"><div class="leg-dot" style="background:#21262d;border:1px dashed #555"></div>Docker compose boundary</div>
+</div>
+</div>
+
+<p class="section-title">Components</p>
+<div class="cards">
+  <div class="card">
+    <div class="card-header"><span class="badge go">Go</span><h3>mcp-trino</h3></div>
+    <p>MCP server exposing Trino SQL engine. Supports STDIO and StreamableHTTP transports. Enforces read-only queries and OAuth 2.1 user impersonation.</p>
+    <div><span class="port">:8080</span><span class="port">:6274</span></div>
+    <p class="tools-count">7 tools: execute_query, list_catalogs, list_schemas, list_tables, get_table_schema, sample_table, explain_query</p>
+    <p style="margin-top:6px;font-size:.75rem;color:#6e7681">Packages: cmd/ · internal/config · internal/trino · internal/mcp · internal/cli</p>
+  </div>
+  <div class="card">
+    <div class="card-header"><span class="badge py">Python</span><h3>mcp-superset</h3></div>
+    <p>FastMCP server for Apache Superset BI platform. Covers the full Superset REST API surface across 7 domains.</p>
+    <p class="tools-count">30+ tools across: auth(3) · dashboard(5) · chart(5) · database(13) · sqllab(7) · query(3) · tag(6)</p>
+  </div>
+  <div class="card">
+    <div class="card-header"><span class="badge py">Python</span><h3>auth-proxy</h3></div>
+    <p>OAuth 2.1 reverse proxy — gateway duy nhất cho <strong>cả hai</strong> downstream (mcp-trino và mcp-superset). Xác thực người dùng qua <strong>Azure AD OIDC</strong> (device code flow), cache token, tự động refresh, rồi inject Bearer token vào mọi request trước khi forward.</p>
+    <div><span class="port">:6275 (listen)</span><span class="port">:6274 → mcp-trino</span><span class="port">:fastmcp → mcp-superset</span></div>
+    <div style="margin-top:8px;background:#1a1208;border:1px solid #f0883e44;border-radius:6px;padding:8px;font-size:.78rem;color:#8b949e">
+      <span style="color:#f0883e;font-weight:600">Azure AD OIDC flow:</span><br>
+      1. Client gửi request đến <code>:6275/mcp</code><br>
+      2. auth-proxy redirect → Azure AD device code<br>
+      3. User xác nhận trên thiết bị<br>
+      4. Azure AD trả về <code>access_token</code> (JWT)<br>
+      5. Token cache tại <code>/app/cache/token_cache.json</code><br>
+      6. Request được inject <code>Authorization: Bearer &lt;token&gt;</code> rồi forward
+    </div>
+    <p style="margin-top:6px;font-size:.75rem;color:#6e7681">Stack: Starlette · httpx · msal · uvicorn</p>
+  </div>
+  <div class="card">
+    <div class="card-header"><span class="badge docker">Docker</span><h3>Trino Engine</h3></div>
+    <p>Distributed SQL query engine. Federated queries across MySQL, PostgreSQL, BigQuery, and S3 object stores via connectors.</p>
+    <div><span class="port">:8090→:8080</span></div>
+    <p style="margin-top:6px;font-size:.75rem;color:#6e7681">Network: trino-net · Connectors: mysql, postgresql, bigquery, hive/s3</p>
+  </div>
+  <div class="card">
+    <div class="card-header"><span class="badge docker">Docker</span><h3>Apache Superset</h3></div>
+    <p>Open-source BI and data exploration platform. mcp-superset communicates with it over its REST API for dashboard and chart management.</p>
+    <div><span class="port">:8088</span></div>
+  </div>
+  <div class="card">
+    <div class="card-header"><span class="badge docker">Docker</span><h3>MySQL</h3></div>
+    <p>Demo data source for development and testing. Accessed by Trino via the MySQL connector. Part of the docker-compose stack.</p>
+    <div><span class="port">:3307</span></div>
+    <p style="margin-top:6px;font-size:.75rem;color:#6e7681">Network: trino-net</p>
+  </div>
+</div>
+
+<p class="section-title">Security Architecture</p>
+<div class="sec-grid">
+  <div class="sec-item">
+    <h4>Read-Only Enforcement</h4>
+    <p>mcp-trino parses every SQL statement and blocks any non-SELECT operation before it reaches Trino.</p>
+  </div>
+  <div class="sec-item">
+    <h4>OAuth 2.1 / Azure AD</h4>
+    <p>auth-proxy implements device code flow. Tokens are cached and refreshed automatically; clients never handle credentials.</p>
+  </div>
+  <div class="sec-item">
+    <h4>User Impersonation</h4>
+    <p>mcp-trino forwards the authenticated user identity to Trino so row-level security and audit logs reflect the real caller.</p>
+  </div>
+  <div class="sec-item">
+    <h4>Allowlisting</h4>
+    <p>Catalog, schema, and table allowlists in mcp-trino configuration restrict which data assets are visible to MCP clients.</p>
+  </div>
+  <div class="sec-item">
+    <h4>Network Isolation</h4>
+    <p>All Docker services run on the internal trino-net bridge. Only mapped ports are exposed to the host.</p>
+  </div>
+  <div class="sec-item">
+    <h4>Token Injection</h4>
+    <p>auth-proxy strips client-provided auth headers and injects fresh Azure AD Bearer tokens before forwarding, preventing token spoofing.</p>
+  </div>
+</div>
+
+<p class="section-title">Auth Proxy — Azure AD OIDC Flow</p>
+<div class="diagram-wrap">
+<svg width="820" height="320" viewBox="0 0 820 320" xmlns="http://www.w3.org/2000/svg">
+<defs>
+  <marker id="a1" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3 z" fill="#f0883e"/></marker>
+  <marker id="a2" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3 z" fill="#58a6ff"/></marker>
+  <marker id="a3" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3 z" fill="#3fb950"/></marker>
+  <marker id="a4" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3 z" fill="#a371f7"/></marker>
+</defs>
+<!-- Lifeline headers -->
+<rect x="10" y="10" width="100" height="36" rx="6" fill="#1c2333" stroke="#388bfd" stroke-width="1.2"/>
+<text x="60" y="32" text-anchor="middle" fill="#79c0ff" font-size="11" font-weight="bold">AI Client</text>
+<rect x="160" y="10" width="110" height="36" rx="6" fill="#1a1208" stroke="#f0883e" stroke-width="1.5"/>
+<text x="215" y="26" text-anchor="middle" fill="#f0883e" font-size="11" font-weight="bold">auth-proxy</text>
+<text x="215" y="40" text-anchor="middle" fill="#8b949e" font-size="9">:6275</text>
+<rect x="330" y="10" width="110" height="36" rx="6" fill="#16213e" stroke="#58a6ff" stroke-width="1.2"/>
+<text x="385" y="26" text-anchor="middle" fill="#58a6ff" font-size="11" font-weight="bold">Azure AD</text>
+<text x="385" y="40" text-anchor="middle" fill="#8b949e" font-size="9">login.microsoft.com</text>
+<rect x="500" y="10" width="100" height="36" rx="6" fill="#1a1208" stroke="#8b949e" stroke-width="1.2"/>
+<text x="550" y="26" text-anchor="middle" fill="#8b949e" font-size="11" font-weight="bold">User Browser</text>
+<text x="550" y="40" text-anchor="middle" fill="#8b949e" font-size="9">device login</text>
+<rect x="660" y="10" width="100" height="36" rx="6" fill="#0d2137" stroke="#00add8" stroke-width="1.2"/>
+<text x="710" y="26" text-anchor="middle" fill="#00add8" font-size="11" font-weight="bold">mcp-trino /</text>
+<text x="710" y="40" text-anchor="middle" fill="#3fb950" font-size="9">mcp-superset</text>
+
+<!-- Lifelines (vertical dashed) -->
+<line x1="60" y1="46" x2="60" y2="310" stroke="#388bfd" stroke-width="1" stroke-dasharray="4,3" opacity="0.4"/>
+<line x1="215" y1="46" x2="215" y2="310" stroke="#f0883e" stroke-width="1" stroke-dasharray="4,3" opacity="0.4"/>
+<line x1="385" y1="46" x2="385" y2="310" stroke="#58a6ff" stroke-width="1" stroke-dasharray="4,3" opacity="0.4"/>
+<line x1="550" y1="46" x2="550" y2="310" stroke="#8b949e" stroke-width="1" stroke-dasharray="4,3" opacity="0.4"/>
+<line x1="710" y1="46" x2="710" y2="310" stroke="#00add8" stroke-width="1" stroke-dasharray="4,3" opacity="0.4"/>
+
+<!-- Step 1: client → proxy -->
+<line x1="62" y1="70" x2="212" y2="70" stroke="#f0883e" stroke-width="1.5" marker-end="url(#a1)"/>
+<text x="130" y="65" text-anchor="middle" fill="#f0883e" font-size="9">tools/call (no token)</text>
+
+<!-- Step 2: proxy → Azure device code -->
+<line x1="217" y1="90" x2="382" y2="90" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#a2)"/>
+<text x="298" y="85" text-anchor="middle" fill="#58a6ff" font-size="9">POST /devicecode</text>
+
+<!-- Step 3: Azure → proxy (user_code) -->
+<line x1="382" y1="108" x2="217" y2="108" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#a2)"/>
+<text x="298" y="103" text-anchor="middle" fill="#58a6ff" font-size="9">user_code + verification_uri</text>
+
+<!-- Step 4: proxy → client (login message) -->
+<line x1="213" y1="126" x2="63" y2="126" stroke="#f0883e" stroke-width="1.5" marker-end="url(#a1)"/>
+<text x="135" y="121" text-anchor="middle" fill="#f0883e" font-size="9">return login_message(user_code)</text>
+
+<!-- Step 5: user → browser -->
+<line x1="62" y1="148" x2="547" y2="148" stroke="#8b949e" stroke-width="1.3" stroke-dasharray="5,3" marker-end="url(#a1)"/>
+<text x="300" y="143" text-anchor="middle" fill="#8b949e" font-size="9">user opens microsoft.com/devicelogin → enters code</text>
+
+<!-- Step 6: browser → Azure -->
+<line x1="550" y1="165" x2="387" y2="165" stroke="#a371f7" stroke-width="1.3" marker-end="url(#a4)"/>
+<text x="468" y="160" text-anchor="middle" fill="#a371f7" font-size="9">approve on Azure AD</text>
+
+<!-- Step 7: proxy polling Azure -->
+<line x1="217" y1="183" x2="382" y2="183" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#a2)"/>
+<text x="298" y="178" text-anchor="middle" fill="#58a6ff" font-size="9">poll: grant_type=device_code (every ~5s)</text>
+
+<!-- Step 8: Azure → proxy (access_token) -->
+<line x1="382" y1="200" x2="217" y2="200" stroke="#3fb950" stroke-width="1.8" marker-end="url(#a3)"/>
+<text x="298" y="195" text-anchor="middle" fill="#3fb950" font-size="9" font-weight="bold">access_token + refresh_token (JWT)</text>
+
+<!-- Step 9: cache token -->
+<rect x="155" y="208" width="122" height="18" rx="4" fill="#1a2a1a" stroke="#3fb950" stroke-width="1"/>
+<text x="215" y="220" text-anchor="middle" fill="#3fb950" font-size="9">cache → token_cache.json · decode JWT claims</text>
+
+<!-- Step 10: client retry -->
+<line x1="62" y1="238" x2="212" y2="238" stroke="#f0883e" stroke-width="1.5" marker-end="url(#a1)"/>
+<text x="133" y="233" text-anchor="middle" fill="#f0883e" font-size="9">retry tools/call</text>
+
+<!-- Step 11: proxy injects token → upstream -->
+<line x1="217" y1="256" x2="707" y2="256" stroke="#3fb950" stroke-width="1.8" marker-end="url(#a3)"/>
+<text x="460" y="251" text-anchor="middle" fill="#3fb950" font-size="9" font-weight="bold">POST upstream + Authorization: Bearer &lt;access_token&gt; + Mcp-Session-Id</text>
+
+<!-- Step 12: upstream → proxy → client -->
+<line x1="707" y1="274" x2="217" y2="274" stroke="#00add8" stroke-width="1.5" marker-end="url(#a2)"/>
+<text x="460" y="269" text-anchor="middle" fill="#00add8" font-size="9">MCP response (JSON-RPC result)</text>
+<line x1="213" y1="290" x2="63" y2="290" stroke="#f0883e" stroke-width="1.5" marker-end="url(#a1)"/>
+<text x="133" y="285" text-anchor="middle" fill="#f0883e" font-size="9">return result to client</text>
+</svg>
+
+<div style="display:flex;gap:20px;flex-wrap:wrap;margin-top:6px">
+  <div class="leg"><div class="leg-dot" style="background:#58a6ff"></div>Azure AD OIDC (device code flow)</div>
+  <div class="leg"><div class="leg-dot" style="background:#3fb950"></div>Token acquired &amp; injected</div>
+  <div class="leg"><div class="leg-dot" style="background:#f0883e"></div>MCP request/response</div>
+  <div class="leg"><div class="leg-dot" style="background:#8b949e;opacity:.5"></div>User action (out-of-band)</div>
+</div>
+<div style="margin-top:10px;background:#161b22;border:1px solid #21262d;border-radius:6px;padding:10px;font-size:.78rem;color:#8b949e">
+  <span style="color:#f0883e;font-weight:600">Token lifecycle:</span>
+  Token hết hạn → <code>token_valid()</code> = false → tự động gọi <code>refresh_token()</code> với <code>grant_type=refresh_token</code>.
+  Nếu refresh fail (invalid_grant / interaction_required) → xóa token → restart device code flow.
+  JWT payload được decode (base64) để lấy <code>upn/email/preferred_username</code> → dùng cho Trino user impersonation.
+</div>
+</div>
+
+<p class="section-title" style="margin-top:20px">Superset → Trino Query Flow</p>
+<div class="diagram-wrap">
+<svg width="820" height="260" viewBox="0 0 820 260" xmlns="http://www.w3.org/2000/svg">
+<defs>
+  <marker id="b1" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3 z" fill="#f0883e"/></marker>
+  <marker id="b2" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3 z" fill="#3fb950"/></marker>
+  <marker id="b3" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3 z" fill="#00add8"/></marker>
+  <marker id="b4" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3 z" fill="#a3e635"/></marker>
+</defs>
+<!-- Headers -->
+<rect x="5" y="10" width="90" height="36" rx="6" fill="#1c2333" stroke="#388bfd" stroke-width="1.2"/>
+<text x="50" y="32" text-anchor="middle" fill="#79c0ff" font-size="10" font-weight="bold">AI Client</text>
+<rect x="120" y="10" width="110" height="36" rx="6" fill="#1a1208" stroke="#f0883e" stroke-width="1.5"/>
+<text x="175" y="26" text-anchor="middle" fill="#f0883e" font-size="10" font-weight="bold">auth-proxy</text>
+<text x="175" y="40" text-anchor="middle" fill="#8b949e" font-size="9">:6275</text>
+<rect x="255" y="10" width="110" height="36" rx="6" fill="#0d1f0d" stroke="#3fb950" stroke-width="1.5"/>
+<text x="310" y="26" text-anchor="middle" fill="#3fb950" font-size="10" font-weight="bold">mcp-superset</text>
+<text x="310" y="40" text-anchor="middle" fill="#8b949e" font-size="9">FastMCP</text>
+<rect x="390" y="10" width="100" height="36" rx="6" fill="#0d1f0d" stroke="#3fb950" stroke-width="1.2"/>
+<text x="440" y="26" text-anchor="middle" fill="#3fb950" font-size="10" font-weight="bold">Superset</text>
+<text x="440" y="40" text-anchor="middle" fill="#8b949e" font-size="9">:8088</text>
+<rect x="515" y="10" width="110" height="36" rx="6" fill="#0d2137" stroke="#00add8" stroke-width="1.5"/>
+<text x="570" y="26" text-anchor="middle" fill="#00add8" font-size="10" font-weight="bold">mcp-trino</text>
+<text x="570" y="40" text-anchor="middle" fill="#8b949e" font-size="9">:6274</text>
+<rect x="650" y="10" width="100" height="36" rx="6" fill="#1a1108" stroke="#f0883e" stroke-width="1.2"/>
+<text x="700" y="26" text-anchor="middle" fill="#f0883e" font-size="10" font-weight="bold">Trino Engine</text>
+<text x="700" y="40" text-anchor="middle" fill="#8b949e" font-size="9">:8080</text>
+
+<!-- Lifelines -->
+<line x1="50" y1="46" x2="50" y2="250" stroke="#388bfd" stroke-width="1" stroke-dasharray="4,3" opacity="0.3"/>
+<line x1="175" y1="46" x2="175" y2="250" stroke="#f0883e" stroke-width="1" stroke-dasharray="4,3" opacity="0.3"/>
+<line x1="310" y1="46" x2="310" y2="250" stroke="#3fb950" stroke-width="1" stroke-dasharray="4,3" opacity="0.3"/>
+<line x1="440" y1="46" x2="440" y2="250" stroke="#3fb950" stroke-width="1" stroke-dasharray="4,3" opacity="0.3"/>
+<line x1="570" y1="46" x2="570" y2="250" stroke="#00add8" stroke-width="1" stroke-dasharray="4,3" opacity="0.3"/>
+<line x1="700" y1="46" x2="700" y2="250" stroke="#f0883e" stroke-width="1" stroke-dasharray="4,3" opacity="0.3"/>
+
+<!-- 1: get superset token -->
+<line x1="52" y1="68" x2="172" y2="68" stroke="#f0883e" stroke-width="1.4" marker-end="url(#b1)"/>
+<text x="110" y="63" text-anchor="middle" fill="#f0883e" font-size="9">get_superset_token(username)</text>
+
+<!-- 2: proxy → superset_auth.py -->
+<line x1="177" y1="84" x2="307" y2="84" stroke="#3fb950" stroke-width="1.4" marker-end="url(#b2)"/>
+<text x="242" y="79" text-anchor="middle" fill="#3fb950" font-size="9">get_superset_token() (uses Azure JWT email)</text>
+
+<!-- 3: superset REST login -->
+<line x1="312" y1="100" x2="437" y2="100" stroke="#3fb950" stroke-width="1.4" marker-end="url(#b2)"/>
+<text x="373" y="95" text-anchor="middle" fill="#3fb950" font-size="9">POST /api/v1/security/login</text>
+<line x1="437" y1="115" x2="312" y2="115" stroke="#3fb950" stroke-width="1.4" marker-end="url(#b2)"/>
+<text x="373" y="110" text-anchor="middle" fill="#3fb950" font-size="9">superset_token (JWT)</text>
+
+<!-- 4: return token to client -->
+<line x1="307" y1="130" x2="172" y2="130" stroke="#3fb950" stroke-width="1.4" marker-end="url(#b2)"/>
+<line x1="172" y1="144" x2="52" y2="144" stroke="#f0883e" stroke-width="1.4" marker-end="url(#b1)"/>
+<text x="110" y="140" text-anchor="middle" fill="#a3e635" font-size="9" font-weight="bold">superset_token returned to client</text>
+
+<!-- 5: sqllab execute (via Superset → Trino) -->
+<line x1="52" y1="165" x2="172" y2="165" stroke="#f0883e" stroke-width="1.4" marker-end="url(#b1)"/>
+<text x="110" y="160" text-anchor="middle" fill="#f0883e" font-size="9">superset_sqllab_execute_query(sql, db_id)</text>
+<line x1="177" y1="180" x2="307" y2="180" stroke="#3fb950" stroke-width="1.4" marker-end="url(#b2)"/>
+<text x="242" y="175" text-anchor="middle" fill="#3fb950" font-size="9">Bearer superset_token → POST /api/v1/sqllab/execute</text>
+<line x1="312" y1="196" x2="437" y2="196" stroke="#3fb950" stroke-width="1.4" marker-end="url(#b2)"/>
+<text x="373" y="191" text-anchor="middle" fill="#3fb950" font-size="9">SQL Lab executes query</text>
+
+<!-- 6: Superset → Trino (Trino connector) -->
+<line x1="442" y1="212" x2="567" y2="212" stroke="#00add8" stroke-width="1.6" marker-end="url(#b3)"/>
+<text x="503" y="207" text-anchor="middle" fill="#00add8" font-size="9" font-weight="bold">Superset DB connector → mcp-trino HTTP</text>
+<line x1="572" y1="226" x2="697" y2="226" stroke="#00add8" stroke-width="1.4" marker-end="url(#b3)"/>
+<text x="633" y="221" text-anchor="middle" fill="#00add8" font-size="9">execute SQL on Trino engine</text>
+<line x1="697" y1="240" x2="442" y2="240" stroke="#a3e635" stroke-width="1.4" marker-end="url(#b4)"/>
+<text x="570" y="235" text-anchor="middle" fill="#a3e635" font-size="9">query results → Superset → mcp-superset → client</text>
+</svg>
+
+<div style="margin-top:10px;background:#161b22;border:1px solid #21262d;border-radius:6px;padding:10px;font-size:.78rem;color:#8b949e">
+  <span style="color:#3fb950;font-weight:600">Superset → Trino connection:</span>
+  Superset kết nối Trino qua <strong>Trino SQLAlchemy connector</strong> (configured trong Superset Database settings).
+  Khi AI gọi <code>superset_sqllab_execute_query</code>, Superset nhận SQL → chạy qua connector → gửi đến Trino engine.
+  Flow này <strong>không</strong> đi qua mcp-trino (Go server) — Superset tự kết nối trực tiếp đến Trino port <code>:8080</code>.
+  mcp-trino chỉ được dùng khi AI client gọi trực tiếp tool <code>execute_query</code> của MCP.
+</div>
+</div>
+
+<p style="text-align:center;color:#30363d;font-size:.75rem;margin-top:16px">MCP Architecture · Generated 2026-07-01</p>
+</body>
+</html>

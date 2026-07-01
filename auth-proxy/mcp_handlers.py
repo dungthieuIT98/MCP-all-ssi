@@ -9,6 +9,7 @@ import os
 import httpx
 
 from auth import token_state, token_valid, refresh_token, start_device_code_flow, login_message
+from superset_auth import get_superset_token
 
 log = logging.getLogger("auth-proxy")
 
@@ -27,6 +28,7 @@ FALLBACK_TOOLS = [
     {"name": "list_tables", "description": "List tables in a schema", "inputSchema": {"type": "object", "properties": {"catalog": {"type": "string"}, "schema": {"type": "string"}}}},
     {"name": "get_table_schema", "description": "Get table column definitions", "inputSchema": {"type": "object", "properties": {"table": {"type": "string"}}, "required": ["table"]}},
     {"name": "explain_query", "description": "Explain query execution plan", "inputSchema": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}},
+    {"name": "get_superset_token", "description": "Get Superset access token using Azure AD authentication", "inputSchema": {"type": "object", "properties": {"username": {"type": "string", "description": "Superset username (email). If not provided, uses admin credentials."}}}},
 ]
 
 _cached_tools = None
@@ -223,6 +225,10 @@ async def handle_tools_call(msg: dict, headers: dict) -> dict:
     else:
         log.info("[tool-call] args=%s", json.dumps(tool_args, ensure_ascii=False)[:400])
 
+    # Handle get_superset_token specially
+    if tool_name == "get_superset_token":
+        return await handle_get_superset_token(msg)
+
     if token_valid():
         body = json.dumps(msg).encode()
         resp = await forward_to_upstream(body, headers)
@@ -287,6 +293,86 @@ async def handle_tools_call(msg: dict, headers: dict) -> dict:
         "result": {
             "content": [{"type": "text", "text": "Failed to acquire token. Check auth-proxy logs."}],
             "isError": True,
+        },
+    }
+
+
+async def handle_get_superset_token(msg: dict) -> dict:
+    """Handle get_superset_token tool call."""
+    params = msg.get("params", {})
+    tool_args = params.get("arguments", {})
+    username = tool_args.get("username")
+
+    _sep("handle_get_superset_token")
+    log.info(f"[superset-token] username={username}")
+
+    # Ensure Azure AD token is valid first
+    if not token_valid():
+        log.info("[superset-token] Azure AD token not valid, attempting refresh")
+        if not await refresh_token():
+            if not token_state["access_token"]:
+                if not token_state["polling"]:
+                    await start_device_code_flow()
+                return {
+                    "jsonrpc": "2.0",
+                    "id": msg.get("id"),
+                    "result": {
+                        "content": [{"type": "text", "text": login_message()}],
+                        "isError": False,
+                    },
+                }
+
+    # Get user email from Azure AD token claims
+    user_email = username
+    if not user_email and token_state.get("token_claims"):
+        claims = token_state["token_claims"]
+        user_email = claims.get("upn") or claims.get("email") or claims.get("preferred_username")
+
+    log.info(f"[superset-token] Getting Superset token for: {user_email}")
+
+    # Get Superset token
+    superset_token, error = await get_superset_token(user_email)
+
+    if error and not superset_token:
+        return {
+            "jsonrpc": "2.0",
+            "id": msg.get("id"),
+            "result": {
+                "content": [{"type": "text", "text": f"Failed to get Superset token: {error}"}],
+                "isError": True,
+            },
+        }
+
+    if error:
+        # Token returned but with warning
+        return {
+            "jsonrpc": "2.0",
+            "id": msg.get("id"),
+            "result": {
+                "content": [{
+                    "type": "text",
+                    "text": json.dumps({
+                        "superset_token": superset_token,
+                        "warning": error,
+                        "user": user_email,
+                    })
+                }],
+                "isError": False,
+            },
+        }
+
+    return {
+        "jsonrpc": "2.0",
+        "id": msg.get("id"),
+        "result": {
+            "content": [{
+                "type": "text",
+                "text": json.dumps({
+                    "superset_token": superset_token,
+                    "user": user_email,
+                })
+            }],
+            "isError": False,
         },
     }
 
