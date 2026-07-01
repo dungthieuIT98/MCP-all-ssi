@@ -30,6 +30,9 @@ Issues = "https://github.com/yourusername/superset-mcp/issues"
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
+[tool.setuptools.packages.find]
+include = ["tools*", "utils*"]
+
 [tool.black]
 line-length = 88
 target-version = ["py310"]

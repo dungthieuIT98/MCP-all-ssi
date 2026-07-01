@@ -3,13 +3,13 @@ from tools import (
     auth,
     chart,
     dashboard,
-    database,
+    # database,     # hidden: disabled — query via Trino MCP instead
     dataset,
     explore,
-    query,
-    saved_query,
-    system,
-    sqllab,
+    # query,        # hidden: not needed
+    # saved_query,  # hidden: not needed
+    # sqllab,       # hidden: disabled — query via Trino MCP instead
+    # system,       # hidden: not needed
     tag,
     user,
 )
@@ -18,13 +18,8 @@ __all__ = [
     "auth",
     "chart",
     "dashboard",
-    "database",
     "dataset",
     "explore",
-    "query",
-    "saved_query",
-    "system",
-    "sqllab",
     "tag",
     "user",
 ]

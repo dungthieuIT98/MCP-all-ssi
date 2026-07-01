@@ -4,8 +4,9 @@ from contextlib import asynccontextmanager
 from typing import Any, AsyncIterator
 
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 
-from .client import (
+from client import (
     SupersetContext,
     close_superset_context,
     create_superset_context,
@@ -32,4 +33,5 @@ mcp = FastMCP(
     "superset",
     lifespan=superset_lifespan,
     dependencies=["fastapi", "uvicorn", "python-dotenv", "httpx"],
+    transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),
 )

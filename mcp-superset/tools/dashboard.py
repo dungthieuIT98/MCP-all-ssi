@@ -28,32 +28,11 @@ async def superset_dashboard_get_by_id(ctx: Context, dashboard_id: int) -> Dict[
     return await make_api_request(ctx, "get", f"{DASHBOARD_BASE}/{dashboard_id}")
 
 
-@mcp.tool()
-@requires_auth
-@handle_api_errors
-async def superset_dashboard_create(
-    ctx: Context, dashboard_title: str, json_metadata: Dict[str, Any] = None
-) -> Dict[str, Any]:
-    """Create a new dashboard in Superset."""
-    payload: Dict[str, Any] = {"dashboard_title": dashboard_title}
-    if json_metadata:
-        payload["json_metadata"] = json_metadata
-    return await make_api_request(ctx, "post", DASHBOARD_BASE, data=payload)
+# @mcp.tool()
+# async def superset_dashboard_create(...): hidden — read-only mode
 
+# @mcp.tool()
+# async def superset_dashboard_update(...): hidden — read-only mode
 
-@mcp.tool()
-@requires_auth
-@handle_api_errors
-async def superset_dashboard_update(
-    ctx: Context, dashboard_id: int, data: Dict[str, Any]
-) -> Dict[str, Any]:
-    """Update an existing dashboard."""
-    return await make_api_request(ctx, "put", f"{DASHBOARD_BASE}/{dashboard_id}", data=data)
-
-
-@mcp.tool()
-@requires_auth
-@handle_api_errors
-async def superset_dashboard_delete(ctx: Context, dashboard_id: int) -> Dict[str, Any]:
-    """Delete a dashboard."""
-    return await delete_with_confirmation_async(ctx, f"{DASHBOARD_BASE}/{dashboard_id}", "Dashboard", dashboard_id)
+# @mcp.tool()
+# async def superset_dashboard_delete(...): hidden — read-only mode

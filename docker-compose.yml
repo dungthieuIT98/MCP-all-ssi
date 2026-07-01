@@ -62,9 +62,9 @@ services:
       - OAUTH_ENABLED=true
       - OAUTH_MODE=proxy
       - OAUTH_PROVIDER=azure
-      - OIDC_ISSUER=https://sts.windows.net/0314c27a-7092-4151-8bbb-f71b64029748/
-      - OIDC_AUDIENCE=dd72be28-a3ed-4d76-a601-ffff997c1e42
-      - OIDC_CLIENT_ID=98af5baf-697b-49ac-a0c0-ab751818774e
+      - OIDC_ISSUER=https://sts.windows.net/${AZURE_TENANT_ID}/
+      - OIDC_AUDIENCE=${AZURE_CLIENT_ID}
+      - OIDC_CLIENT_ID=${AZURE_CLIENT_ID}
       - OIDC_CLIENT_SECRET=${AZURE_CLIENT_SECRET}
       - OAUTH_REDIRECT_URI=http://localhost:6274/oauth/callback
       - JWT_SECRET=${JWT_SECRET}
@@ -79,21 +79,23 @@ services:
 
   # ── Superset ──────────────────────────────────────────────────────
   superset:
-    image: apache/superset:latest
+    build:
+      context: .
+      dockerfile: superset.Dockerfile
     container_name: superset
     hostname: superset
     ports:
       - "8088:8088"
     environment:
-      - SUPERSET_SECRET_KEY=${SUPERSET_SECRET_KEY:-supersetsecretkey}
-      - SUPERSET_ADMIN_USERNAME=${SUPERSET_ADMIN_USERNAME:-admin}
-      - SUPERSET_ADMIN_PASSWORD=${SUPERSET_ADMIN_PASSWORD:-admin}
-      - SUPERSET_ADMIN_EMAIL=${SUPERSET_ADMIN_EMAIL:-admin@superset.com}
+      - SUPERSET_SECRET_KEY=${SUPERSET_SECRET_KEY}
+      - SUPERSET_ADMIN_USERNAME=${SUPERSET_ADMIN_USERNAME}
+      - SUPERSET_ADMIN_PASSWORD=${SUPERSET_ADMIN_PASSWORD}
+      - SUPERSET_ADMIN_EMAIL=${SUPERSET_ADMIN_EMAIL}
       - SUPERSET_CONFIG_PATH=/app/superset_home/superset_config.py
       # Azure AD OAuth
-      - OAUTH_CLIENT_ID=${OIDC_CLIENT_ID}
+      - OAUTH_CLIENT_ID=${AZURE_CLIENT_ID}
       - OAUTH_CLIENT_SECRET=${AZURE_CLIENT_SECRET}
-      - OAUTH_TENANT_ID=0314c27a-7092-4151-8bbb-f71b64029748
+      - OAUTH_TENANT_ID=${AZURE_TENANT_ID}
     volumes:
       - superset-data:/app/superset_home
       - ./superset_config.py:/app/superset_home/superset_config.py
@@ -104,8 +106,10 @@ services:
       interval: 15s
       timeout: 10s
       retries: 10
-    command: >
-      sh -c "
+    command:
+      - sh
+      - -c
+      - >-
         superset db upgrade &&
         superset fab create-admin
           --username $$SUPERSET_ADMIN_USERNAME
@@ -115,7 +119,6 @@ services:
           --password $$SUPERSET_ADMIN_PASSWORD 2>/dev/null || true &&
         superset init &&
         superset run -h 0.0.0.0 -p 8088
-      "
 
   # ── Superset MCP ──────────────────────────────────────────────────
   superset-mcp:
@@ -127,8 +130,8 @@ services:
       - "6276:8000"
     environment:
       - SUPERSET_BASE_URL=http://superset:8088
-      - SUPERSET_USERNAME=${SUPERSET_ADMIN_USERNAME:-admin}
-      - SUPERSET_PASSWORD=${SUPERSET_ADMIN_PASSWORD:-admin}
+      - SUPERSET_USERNAME=${SUPERSET_ADMIN_USERNAME}
+      - SUPERSET_PASSWORD=${SUPERSET_ADMIN_PASSWORD}
     depends_on:
       superset:
         condition: service_healthy
@@ -143,6 +146,7 @@ services:
       dockerfile: Dockerfile
     container_name: auth-proxy
     env_file:
+      - ./.env
       - ./auth-proxy/.env
     environment:
       - UPSTREAM_URL=http://trino-mcp:8080/mcp

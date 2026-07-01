@@ -29,41 +29,11 @@ async def superset_chart_get_by_id(ctx: Context, chart_id: int) -> Dict[str, Any
     return await make_api_request(ctx, "get", f"{CHART_BASE}/{chart_id}")
 
 
-@mcp.tool()
-@requires_auth
-@handle_api_errors
-async def superset_chart_create(
-    ctx: Context,
-    slice_name: str,
-    datasource_id: int,
-    datasource_type: str,
-    viz_type: str,
-    params: Dict[str, Any],
-) -> Dict[str, Any]:
-    """Create a new chart in Superset."""
-    payload = {
-        "slice_name": slice_name,
-        "datasource_id": datasource_id,
-        "datasource_type": datasource_type,
-        "viz_type": viz_type,
-        "params": json.dumps(params),
-    }
-    return await make_api_request(ctx, "post", CHART_BASE, data=payload)
+# @mcp.tool()
+# async def superset_chart_create(...): hidden — read-only mode
 
+# @mcp.tool()
+# async def superset_chart_update(...): hidden — read-only mode
 
-@mcp.tool()
-@requires_auth
-@handle_api_errors
-async def superset_chart_update(
-    ctx: Context, chart_id: int, data: Dict[str, Any]
-) -> Dict[str, Any]:
-    """Update an existing chart."""
-    return await make_api_request(ctx, "put", f"{CHART_BASE}/{chart_id}", data=data)
-
-
-@mcp.tool()
-@requires_auth
-@handle_api_errors
-async def superset_chart_delete(ctx: Context, chart_id: int) -> Dict[str, Any]:
-    """Delete a chart."""
-    return await delete_with_confirmation_async(ctx, f"{CHART_BASE}/{chart_id}", "Chart", chart_id)
+# @mcp.tool()
+# async def superset_chart_delete(...): hidden — read-only mode

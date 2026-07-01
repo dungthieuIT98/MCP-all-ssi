@@ -20,13 +20,8 @@ async def superset_tag_list(ctx: Context) -> Dict[str, Any]:
     return await make_api_request(ctx, "get", TAG_BASE)
 
 
-@mcp.tool()
-@requires_auth
-@handle_api_errors
-async def superset_tag_create(ctx: Context, name: str) -> Dict[str, Any]:
-    """Create a new tag in Superset."""
-    return await make_api_request(ctx, "post", TAG_BASE, data={"name": name})
-
+# @mcp.tool()
+# async def superset_tag_create(...): hidden — read-only mode
 
 @mcp.tool()
 @requires_auth

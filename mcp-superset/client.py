@@ -59,7 +59,7 @@ async def create_superset_context() -> SupersetContext:
     """Create a new SupersetContext with HTTP client."""
     from utils.constants import USER_ME
 
-    client = httpx.AsyncClient(base_url=config.base_url, timeout=30.0)
+    client = httpx.AsyncClient(base_url=config.base_url, timeout=30.0, follow_redirects=True)
     ctx = SupersetContext(
         client=client,
         base_url=config.base_url,
@@ -83,6 +83,15 @@ async def create_superset_context() -> SupersetContext:
             logger.info(f"Error verifying stored token: {e}")
             ctx.access_token = None
             client.headers.pop("Authorization", None)
+
+    # Auto-login with credentials from env if no valid token
+    if not ctx.access_token and config.username and config.password:
+        logger.info("No valid token found, authenticating with credentials...")
+        result = await authenticate_user(ctx, config.username, config.password)
+        if "error" in result:
+            logger.warning(f"Auto-login failed: {result['error']}")
+        else:
+            logger.info("Auto-login successful")
 
     return ctx
 

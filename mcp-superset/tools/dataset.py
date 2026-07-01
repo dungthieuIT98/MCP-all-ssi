@@ -28,20 +28,5 @@ async def superset_dataset_get_by_id(ctx: Context, dataset_id: int) -> Dict[str,
     return await make_api_request(ctx, "get", f"{DATASET_BASE}/{dataset_id}")
 
 
-@mcp.tool()
-@requires_auth
-@handle_api_errors
-async def superset_dataset_create(
-    ctx: Context,
-    table_name: str,
-    database_id: int,
-    schema: Optional[str] = None,
-    owners: Optional[List[int]] = None,
-) -> Dict[str, Any]:
-    """Create a new dataset in Superset."""
-    payload: Dict[str, Any] = {"table_name": table_name, "database": database_id}
-    if schema:
-        payload["schema"] = schema
-    if owners:
-        payload["owners"] = owners
-    return await make_api_request(ctx, "post", DATASET_BASE, data=payload)
+# @mcp.tool()
+# async def superset_dataset_create(...): hidden — read-only mode

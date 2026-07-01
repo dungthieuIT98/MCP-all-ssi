@@ -17,7 +17,9 @@ MCP server cho Apache Superset, cho phép AI agents kết nối và điều khi�
 
 ---
 
-## MCP Tools (48 total)
+## MCP Tools (48 total — 21 hidden, 27 active)
+
+> **Đã ẩn**: Toàn bộ Database (12) và SQL Lab (7) tools bị disabled ở cả `mcp-superset/tools/__init__.py` và `auth-proxy/superset_handlers.py`. Lý do: Superset sẽ được config để call Trino hoặc DB khác — AI agent nên query trực tiếp qua Trino MCP thay vì qua Superset SQL Lab.
 
 ### Authentication (3)
 | Tool | Mô tả |
@@ -31,67 +33,67 @@ MCP server cho Apache Superset, cho phép AI agents kết nối và điều khi�
 |------|--------|
 | `superset_dashboard_list` | List all dashboards |
 | `superset_dashboard_get_by_id` | Get dashboard details |
-| `superset_dashboard_create` | Tạo dashboard mới |
-| `superset_dashboard_update` | Update dashboard |
-| `superset_dashboard_delete` | Xóa dashboard |
+| ~~`superset_dashboard_create`~~ | Tạo dashboard mới |
+| ~~`superset_dashboard_update`~~ | Update dashboard |
+| ~~`superset_dashboard_delete`~~ | Xóa dashboard |
 
 ### Chart (5)
 | Tool | Mô tả |
 |------|--------|
 | `superset_chart_list` | List all charts |
 | `superset_chart_get_by_id` | Get chart details |
-| `superset_chart_create` | Tạo chart mới |
-| `superset_chart_update` | Update chart |
-| `superset_chart_delete` | Xóa chart |
+| ~~`superset_chart_create`~~ | Tạo chart mới |
+| ~~`superset_chart_update`~~ | Update chart |
+| ~~`superset_chart_delete`~~ | Xóa chart |
 
-### Database (12)
+### Database (12) — ~~hidden~~
 | Tool | Mô tả |
 |------|--------|
-| `superset_database_list` | List databases |
-| `superset_database_get_by_id` | Get database details |
-| `superset_database_create` | Tạo database connection |
-| `superset_database_get_tables` | List tables |
-| `superset_database_schemas` | Get schemas |
-| `superset_database_test_connection` | Test connection |
-| `superset_database_update` | Update database |
-| `superset_database_delete` | Delete database |
-| `superset_database_get_catalogs` | Get catalogs |
-| `superset_database_get_connection` | Get connection info |
-| `superset_database_get_function_names` | List SQL functions |
-| `superset_database_get_related_objects` | Get related charts/dashboards |
-| `superset_database_validate_sql` | Validate SQL |
-| `superset_database_validate_parameters` | Validate connection params |
+| ~~`superset_database_list`~~ | List databases |
+| ~~`superset_database_get_by_id`~~ | Get database details |
+| ~~`superset_database_create`~~ | Tạo database connection |
+| ~~`superset_database_get_tables`~~ | List tables |
+| ~~`superset_database_schemas`~~ | Get schemas |
+| ~~`superset_database_test_connection`~~ | Test connection |
+| ~~`superset_database_update`~~ | Update database |
+| ~~`superset_database_delete`~~ | Delete database |
+| ~~`superset_database_get_catalogs`~~ | Get catalogs |
+| ~~`superset_database_get_connection`~~ | Get connection info |
+| ~~`superset_database_get_function_names`~~ | List SQL functions |
+| ~~`superset_database_get_related_objects`~~ | Get related charts/dashboards |
+| ~~`superset_database_validate_sql`~~ | Validate SQL |
+| ~~`superset_database_validate_parameters`~~ | Validate connection params |
 
 ### Dataset (3)
 | Tool | Mô tả |
 |------|--------|
 | `superset_dataset_list` | List all datasets |
 | `superset_dataset_get_by_id` | Get dataset details |
-| `superset_dataset_create` | Tạo dataset mới |
+| ~~`superset_dataset_create`~~ | Tạo dataset mới |
 
-### SQL Lab (7)
+### SQL Lab (7) — ~~hidden~~
 | Tool | Mô tả |
 |------|--------|
-| `superset_sqllab_execute_query` | Execute SQL query |
-| `superset_sqllab_get_saved_queries` | List saved queries |
-| `superset_sqllab_format_sql` | Format SQL |
-| `superset_sqllab_get_results` | Get query results |
-| `superset_sqllab_estimate_query_cost` | Estimate query cost |
-| `superset_sqllab_export_query_results` | Export to CSV |
-| `superset_sqllab_get_bootstrap_data` | Get SQL Lab config |
+| ~~`superset_sqllab_execute_query`~~ | Execute SQL query |
+| ~~`superset_sqllab_get_saved_queries`~~ | List saved queries |
+| ~~`superset_sqllab_format_sql`~~ | Format SQL |
+| ~~`superset_sqllab_get_results`~~ | Get query results |
+| ~~`superset_sqllab_estimate_query_cost`~~ | Estimate query cost |
+| ~~`superset_sqllab_export_query_results`~~ | Export to CSV |
+| ~~`superset_sqllab_get_bootstrap_data`~~ | Get SQL Lab config |
 
-### Query (3)
+### Query (3) — ~~hidden~~
 | Tool | Mô tả |
 |------|--------|
-| `superset_query_list` | List queries |
-| `superset_query_get_by_id` | Get query details |
-| `superset_query_stop` | Stop running query |
+| ~~`superset_query_list`~~ | List queries |
+| ~~`superset_query_get_by_id`~~ | Get query details |
+| ~~`superset_query_stop`~~ | Stop running query |
 
-### Saved Query (2)
+### Saved Query (2) — ~~hidden~~
 | Tool | Mô tả |
 |------|--------|
-| `superset_saved_query_get_by_id` | Get saved query |
-| `superset_saved_query_create` | Create saved query |
+| ~~`superset_saved_query_get_by_id`~~ | Get saved query |
+| ~~`superset_saved_query_create`~~ | Create saved query |
 
 ### User (2)
 | Tool | Mô tả |
@@ -99,21 +101,21 @@ MCP server cho Apache Superset, cho phép AI agents kết nối và điều khi�
 | `superset_user_get_current` | Get current user info |
 | `superset_user_get_roles` | Get user roles |
 
-### Activity (1)
+### Activity (1) — ~~hidden~~
 | Tool | Mô tả |
 |------|--------|
-| `superset_activity_get_recent` | Get recent activity |
+| ~~`superset_activity_get_recent`~~ | Get recent activity |
 
 ### Tag (7)
 | Tool | Mô tả |
 |------|--------|
 | `superset_tag_list` | List tags |
-| `superset_tag_create` | Create tag |
+| ~~`superset_tag_create`~~ | Create tag |
 | `superset_tag_get_by_id` | Get tag details |
 | `superset_tag_objects` | Get tagged objects |
-| `superset_tag_delete` | Delete tag |
-| `superset_tag_object_add` | Add tag to object |
-| `superset_tag_object_remove` | Remove tag from object |
+| ~~`superset_tag_delete`~~ | Delete tag |
+| ~~`superset_tag_object_add`~~ | Add tag to object |
+| ~~`superset_tag_object_remove`~~ | Remove tag from object |
 
 ### Explore (4)
 | Tool | Mô tả |
@@ -129,11 +131,11 @@ MCP server cho Apache Superset, cho phép AI agents kết nối và điều khi�
 | `superset_advanced_data_type_convert` | Convert value to advanced type |
 | `superset_advanced_data_type_list` | List available types |
 
-### System (2)
+### System (2) — ~~hidden~~
 | Tool | Mô tả |
 |------|--------|
-| `superset_menu_get` | Get menu data |
-| `superset_config_get_base_url` | Get base URL |
+| ~~`superset_menu_get`~~ | Get menu data |
+| ~~`superset_config_get_base_url`~~ | Get base URL |
 
 ---
 
