@@ -53,8 +53,8 @@ async def handle_tools_call(msg: dict, headers: dict) -> dict:
     if tool_name in _SUPERSET_TOOL_NAMES:
         return await handle_get_superset_token(msg)
 
-    if not token_state["access_token"]:
-        log.warning("[tool-call] no access_token — starting device code flow")
+    if not token_state["access_token"] or not token_valid():
+        log.warning("[tool-call] no valid token — starting device code flow")
         if not token_state["polling"]:
             await start_device_code_flow()
         return _login_required_response(msg)

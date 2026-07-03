@@ -1,0 +1,616 @@
+================================================================================
+  SAMPLE INPUTS CHO CÁC TOOLS: MCP-TRINO & MCP-SUPERSET
+  Ngày cập nhật: 2026-07-03 (inputs lấy từ db thực tế)
+================================================================================
+
+DB thực tế:
+  Catalogs : memory, mysql, system
+  mysql schemas: demo, information_schema, performance_schema
+  mysql.demo tables: bonds, companies, dividends, fund_holdings, market_indices,
+                     portfolios, stock_prices, stocks, transactions, watchlists
+
+================================================================================
+PHẦN 1: MCP-TRINO TOOLS
+================================================================================
+
+--------------------------------------------------------------------------------
+1. ping_trino
+   Mô tả: Kiểm tra kết nối Trino, trả về status + latency + version.
+
+   Input: (không có tham số)
+
+--------------------------------------------------------------------------------
+2. list_catalogs
+   Mô tả: Liệt kê tất cả catalog.
+
+   Input: (không có tham số)
+
+   Kết quả thực tế: ["memory", "mysql", "system"]
+
+--------------------------------------------------------------------------------
+3. list_schemas
+   Mô tả: Liệt kê schemas trong một catalog.
+
+   Input:
+     catalog (optional, string)
+
+   Ví dụ:
+     { "catalog": "mysql" }
+     { "catalog": "memory" }
+     { "catalog": "system" }
+
+   Kết quả thực tế:
+     mysql  → ["demo", "information_schema", "performance_schema"]
+     memory → ["default", "information_schema"]
+     system → ["information_schema", "jdbc", "metadata", "runtime"]
+
+--------------------------------------------------------------------------------
+4. list_tables
+   Mô tả: Liệt kê các table/view trong catalog/schema.
+
+   Input:
+     catalog (optional, string)
+     schema  (optional, string)
+
+   Ví dụ:
+     { "catalog": "mysql",  "schema": "demo" }
+     { "catalog": "system", "schema": "runtime" }
+     { "catalog": "system", "schema": "metadata" }
+
+   Kết quả thực tế:
+     mysql.demo    → [bonds, companies, dividends, fund_holdings, market_indices,
+                      portfolios, stock_prices, stocks, transactions, watchlists]
+     system.runtime  → [nodes, optimizer_rule_stats, queries, tasks, transactions]
+     system.metadata → [analyze_properties, catalogs, column_properties,
+                         materialized_view_properties, materialized_views,
+                         schema_properties, table_comments, table_properties]
+
+--------------------------------------------------------------------------------
+5. get_table_schema
+   Mô tả: Xem cấu trúc column của một table.
+
+   Input:
+     table   (REQUIRED, string)
+     catalog (optional, string)
+     schema  (optional, string)
+
+   Ví dụ:
+     { "table": "mysql.demo.stocks" }
+     { "table": "mysql.demo.stock_prices" }
+     { "table": "mysql.demo.transactions" }
+     { "table": "mysql.demo.portfolios" }
+     { "table": "mysql.demo.companies" }
+     { "table": "mysql.demo.dividends" }
+     { "table": "mysql.demo.fund_holdings" }
+     { "table": "mysql.demo.market_indices" }
+     { "table": "mysql.demo.bonds" }
+     { "table": "mysql.demo.watchlists" }
+
+   Schema thực tế:
+     stocks        : id, symbol(varchar10), revenue, net_income, eps, pe_ratio, fiscal_year
+     stock_prices  : id, symbol(varchar10), trade_date, open_price, close_price,
+                     high_price, low_price, volume(bigint)
+     transactions  : id, portfolio_id, symbol(varchar10), tx_type(varchar10),
+                     quantity, price, tx_date, fee
+     portfolios    : id, portfolio_name, owner, created_date, total_value, currency
+     companies     : id, symbol(varchar10), company_name, sector, exchange, ipo_date, created_at
+     dividends     : id, symbol(varchar10), ex_date, pay_date, amount, currency
+     fund_holdings : id, fund_name, symbol(varchar10), shares(bigint), market_value,
+                     weight_pct, report_date
+     market_indices: id, index_name, index_code, trade_date, close_value, change_pct
+     bonds         : id, bond_code, issuer, face_value, coupon_rate, maturity_date, credit_rating
+     watchlists    : id, user_name, symbol(varchar10), added_date, target_price, note
+
+--------------------------------------------------------------------------------
+6. sample_table
+   Mô tả: Lấy schema + 5 row mẫu + min/max/null_count cho numeric columns.
+
+   Input:
+     table   (REQUIRED, string)
+     catalog (optional, string)
+     schema  (optional, string)
+
+   Ví dụ:
+     { "table": "mysql.demo.stock_prices" }
+     { "table": "mysql.demo.transactions" }
+     { "table": "mysql.demo.portfolios" }
+     { "table": "mysql.demo.fund_holdings" }
+     { "table": "mysql.demo.market_indices" }
+     { "table": "mysql.demo.bonds" }
+     { "table": "mysql.demo.dividends" }
+     { "table": "mysql.demo.watchlists" }
+     { "table": "mysql.demo.companies" }
+     { "table": "mysql.demo.stocks" }
+
+   Data mẫu thực tế (stock_prices):
+     symbol VNM: close=72.00, volume=1,200,000, trade_date=2026-06-20
+     symbol VIC: close=41.50, volume=3,500,000, trade_date=2026-06-20
+     symbol HPG: close=25.80, volume=8,900,000, trade_date=2026-06-20
+     symbol FPT: close=120.50, volume=950,000,  trade_date=2026-06-20
+     close_price range: [22.50, 120.50]
+
+   Data mẫu thực tế (companies):
+     VNM - Vinamilk      | Consumer Staples | HOSE | IPO 2006-01-19
+     VIC - Vingroup      | Real Estate      | HOSE | IPO 2007-09-20
+     VHM - Vinhomes      | Real Estate      | HOSE | IPO 2018-05-17
+     HPG - Hoa Phat Group| Materials        | HOSE | IPO 2007-11-15
+     FPT - FPT Corporation| Technology      | HOSE | IPO 2006-12-13
+
+   Data mẫu thực tế (portfolios):
+     id=1: "Blue Chip VN"  | owner=Nguyen Van A | total_value=500,000,000 VND
+     id=2: "Tech Growth"   | owner=Tran Thi B   | total_value=250,000,000 VND
+     id=3: "Dividend Focus"| owner=Le Van C     | total_value=800,000,000 VND
+     total_value range: [100,000,000, 1,200,000,000]
+
+   Data mẫu thực tế (transactions):
+     id=1: portfolio_id=1, BUY VNM x1000 @ 70.50, fee=75,000, date=2026-05-10
+     id=2: portfolio_id=1, BUY FPT x500  @ 115.00, fee=65,000, date=2026-05-12
+     id=4: portfolio_id=3, BUY VNM x2000 @ 69.00,  fee=150,000, date=2026-04-20
+     price range: [21.50, 116.00], quantity range: [200, 5000]
+
+   Data mẫu thực tế (fund_holdings):
+     VFMVF1: VNM 5M shares, market_value=360B VND, weight=12.5%
+     VFMVF1: VIC 8M shares, market_value=332B VND, weight=11.5%
+     DCDS:   HPG 10M shares, market_value=258B VND, weight=15.2%
+     report_date=2026-06-30
+
+   Data mẫu thực tế (market_indices):
+     VNINDEX:  close=1285.50, change=+0.45%, date=2026-06-20
+     HNXINDEX: close=235.80,  change=-0.12%, date=2026-06-20
+     VN30:     close=1320.20, change=+0.38%, date=2026-06-20
+
+   Data mẫu thực tế (bonds):
+     VIC2026: Vingroup,    coupon=9.50%, maturity=2026-12-31, rating=BB+
+     HPG2027: Hoa Phat,    coupon=8.80%, maturity=2027-06-30, rating=BBB-
+     TCB2028: Techcombank, coupon=7.50%, maturity=2028-03-15, rating=BBB
+     coupon_rate range: [6.50%, 9.50%]
+
+   Data mẫu thực tế (dividends):
+     VNM: amount=1500 VND, ex_date=2026-03-15, pay_date=2026-04-01
+     FPT: amount=3000 VND, ex_date=2026-03-20, pay_date=2026-04-05
+     GAS: amount=2500 VND, ex_date=2026-04-10, pay_date=2026-04-25
+     amount range: [0, 3000 VND]
+
+   Data mẫu thực tế (watchlists):
+     Nguyen Van A: VNM target=80.00, FPT target=135.00
+     Tran Thi B:   HPG target=30.00, TCB target=40.00
+     Le Van C:     GAS target=95.00
+     target_price range: [26.00, 135.00]
+
+   Data mẫu thực tế (stocks / financials):
+     VNM: revenue=60.5T, net_income=8.2T, EPS=3850, P/E=18.7, FY2025
+     VIC: revenue=120T,  net_income=5.5T, EPS=1200, P/E=34.5, FY2025
+     HPG: revenue=155T,  net_income=9.8T, EPS=1850, P/E=13.9, FY2025
+     FPT: revenue=52T,   net_income=7.2T, EPS=5400, P/E=22.3, FY2025
+     P/E range: [8.0, 34.5]
+
+--------------------------------------------------------------------------------
+7. execute_query
+   Mô tả: Thực thi SQL query trên Trino (default read-only).
+
+   Input:
+     query (REQUIRED, string)
+
+   Ví dụ READ-ONLY:
+     -- Danh sách công ty
+     { "query": "SELECT symbol, company_name, sector, exchange FROM mysql.demo.companies ORDER BY symbol" }
+
+     -- Giá cổ phiếu ngày gần nhất
+     { "query": "SELECT symbol, close_price, volume, trade_date FROM mysql.demo.stock_prices ORDER BY trade_date DESC LIMIT 10" }
+
+     -- Giá VNM 5 ngày gần nhất
+     { "query": "SELECT trade_date, open_price, close_price, high_price, low_price, volume FROM mysql.demo.stock_prices WHERE symbol = 'VNM' ORDER BY trade_date DESC LIMIT 5" }
+
+     -- Top 5 cổ phiếu volume cao nhất
+     { "query": "SELECT symbol, SUM(volume) AS total_volume FROM mysql.demo.stock_prices GROUP BY symbol ORDER BY total_volume DESC LIMIT 5" }
+
+     -- Danh mục đầu tư và giá trị
+     { "query": "SELECT portfolio_name, owner, total_value, currency FROM mysql.demo.portfolios ORDER BY total_value DESC" }
+
+     -- Lịch sử giao dịch của portfolio_id=1
+     { "query": "SELECT symbol, tx_type, quantity, price, fee, tx_date FROM mysql.demo.transactions WHERE portfolio_id = 1 ORDER BY tx_date DESC" }
+
+     -- Cổ tức sắp tới
+     { "query": "SELECT symbol, amount, currency, ex_date, pay_date FROM mysql.demo.dividends ORDER BY ex_date" }
+
+     -- Tỷ lệ nắm giữ của quỹ VFMVF1
+     { "query": "SELECT symbol, shares, market_value, weight_pct FROM mysql.demo.fund_holdings WHERE fund_name = 'VFMVF1' ORDER BY weight_pct DESC" }
+
+     -- Chỉ số thị trường
+     { "query": "SELECT index_code, index_name, close_value, change_pct, trade_date FROM mysql.demo.market_indices ORDER BY trade_date DESC, index_code" }
+
+     -- Trái phiếu theo lãi suất
+     { "query": "SELECT bond_code, issuer, coupon_rate, maturity_date, credit_rating FROM mysql.demo.bonds ORDER BY coupon_rate DESC" }
+
+     -- Watchlist của Nguyen Van A
+     { "query": "SELECT symbol, target_price, added_date, note FROM mysql.demo.watchlists WHERE user_name = 'Nguyen Van A'" }
+
+     -- Tài chính doanh nghiệp FY2025
+     { "query": "SELECT symbol, revenue, net_income, eps, pe_ratio FROM mysql.demo.stocks WHERE fiscal_year = 2025 ORDER BY pe_ratio" }
+
+     -- Join giá + công ty
+     { "query": "SELECT c.symbol, c.company_name, c.sector, sp.close_price, sp.volume, sp.trade_date FROM mysql.demo.companies c JOIN mysql.demo.stock_prices sp ON c.symbol = sp.symbol ORDER BY sp.trade_date DESC, c.symbol LIMIT 20" }
+
+     -- Tổng giá trị giao dịch theo loại
+     { "query": "SELECT tx_type, COUNT(*) AS count, SUM(quantity * price) AS total_value FROM mysql.demo.transactions GROUP BY tx_type" }
+
+     -- SHOW / DESCRIBE
+     { "query": "SHOW SCHEMAS FROM mysql" }
+     { "query": "SHOW TABLES FROM mysql.demo" }
+     { "query": "DESCRIBE mysql.demo.stock_prices" }
+     { "query": "SELECT catalog_name FROM system.metadata.catalogs" }
+
+--------------------------------------------------------------------------------
+8. explain_query
+   Mô tả: Phân tích execution plan của query.
+
+   Input:
+     query  (REQUIRED, string)
+     format (optional, string): LOGICAL | DISTRIBUTED | VALIDATE | IO
+
+   Ví dụ:
+     { "query": "SELECT symbol, close_price FROM mysql.demo.stock_prices WHERE symbol = 'VNM'" }
+
+     { "query": "SELECT c.company_name, sp.close_price, sp.volume FROM mysql.demo.companies c JOIN mysql.demo.stock_prices sp ON c.symbol = sp.symbol", "format": "DISTRIBUTED" }
+
+     { "query": "SELECT symbol, SUM(volume) FROM mysql.demo.stock_prices GROUP BY symbol", "format": "LOGICAL" }
+
+     { "query": "SELECT * FROM mysql.demo.transactions WHERE trade_date >= DATE '2026-05-01'", "format": "IO" }
+
+
+================================================================================
+PHẦN 2: MCP-SUPERSET TOOLS
+================================================================================
+
+Superset chạy tại http://localhost:8088. Credential: admin/admin.
+database_id, dashboard_id, chart_id, dataset_id lấy từ các list tool tương ứng.
+
+--------------------------------------------------------------------------------
+NHÓM AUTH
+--------------------------------------------------------------------------------
+
+9. superset_auth_check_token_validity
+   Input: (không có tham số)
+
+10. superset_auth_refresh_token
+    Input: (không có tham số)
+
+11. superset_auth_authenticate_user
+    Input:
+      username (optional), password (optional), refresh (optional, bool)
+
+    Ví dụ:
+      {}
+      { "username": "admin", "password": "admin" }
+      { "username": "admin", "password": "admin", "refresh": true }
+
+--------------------------------------------------------------------------------
+NHÓM DASHBOARD
+--------------------------------------------------------------------------------
+
+12. superset_dashboard_list
+    Input: (không có tham số)
+
+13. superset_dashboard_get_by_id
+    Input:
+      dashboard_id (REQUIRED, int)
+
+    Ví dụ:
+      { "dashboard_id": 1 }
+    => Lấy ID từ: superset_dashboard_list
+
+--------------------------------------------------------------------------------
+NHÓM CHART
+--------------------------------------------------------------------------------
+
+14. superset_chart_list
+    Input: (không có tham số)
+
+15. superset_chart_get_by_id
+    Input:
+      chart_id (REQUIRED, int)
+
+    Ví dụ:
+      { "chart_id": 1 }
+    => Lấy ID từ: superset_chart_list
+
+--------------------------------------------------------------------------------
+NHÓM DATASET
+--------------------------------------------------------------------------------
+
+16. superset_dataset_list
+    Input: (không có tham số)
+
+17. superset_dataset_get_by_id
+    Input:
+      dataset_id (REQUIRED, int)
+
+    Ví dụ:
+      { "dataset_id": 1 }
+    => Lấy ID từ: superset_dataset_list
+
+--------------------------------------------------------------------------------
+NHÓM DATABASE
+--------------------------------------------------------------------------------
+
+18. superset_database_list
+    Input: (không có tham số)
+
+19. superset_database_get_by_id
+    Input:
+      database_id (REQUIRED, int)
+
+    Ví dụ:
+      { "database_id": 1 }
+    => Lấy ID từ: superset_database_list
+
+20. superset_database_create    [DISABLED — read-only mode]
+
+21. superset_database_get_tables
+    Input:
+      database_id (REQUIRED, int)
+
+    Ví dụ:
+      { "database_id": 1 }
+
+22. superset_database_schemas
+    Input:
+      database_id (REQUIRED, int)
+
+    Ví dụ:
+      { "database_id": 1 }
+
+23. superset_database_test_connection
+    Input:
+      database_data (REQUIRED, dict)
+
+    Ví dụ:
+      {
+        "database_data": {
+          "engine": "trino",
+          "sqlalchemy_uri": "trino://trino@trino:8080/mysql"
+        }
+      }
+
+24. superset_database_update    [DISABLED — read-only mode]
+
+25. superset_database_delete    [DISABLED — read-only mode]
+
+26. superset_database_get_catalogs
+    Input:
+      database_id (REQUIRED, int)
+
+    Ví dụ:
+      { "database_id": 1 }
+
+27. superset_database_get_connection
+    Input:
+      database_id (REQUIRED, int)
+
+    Ví dụ:
+      { "database_id": 1 }
+
+28. superset_database_get_function_names
+    Input:
+      database_id (REQUIRED, int)
+
+    Ví dụ:
+      { "database_id": 1 }
+
+29. superset_database_get_related_objects
+    Input:
+      database_id (REQUIRED, int)
+
+    Ví dụ:
+      { "database_id": 1 }
+
+30. superset_database_validate_sql
+    Input:
+      database_id (REQUIRED, int)
+      sql         (REQUIRED, string)
+
+    Ví dụ:
+      { "database_id": 1, "sql": "SELECT symbol, close_price FROM stock_prices LIMIT 10" }
+      { "database_id": 1, "sql": "SELECT symbol, SUM(volume) FROM stock_prices GROUP BY symbol" }
+
+31. superset_database_validate_parameters
+    Input:
+      parameters (REQUIRED, dict)
+
+    Ví dụ:
+      {
+        "parameters": {
+          "engine": "trino",
+          "host": "trino",
+          "port": 8080,
+          "database": "mysql",
+          "username": "trino"
+        }
+      }
+
+--------------------------------------------------------------------------------
+NHÓM SQL LAB
+--------------------------------------------------------------------------------
+
+32. superset_sqllab_execute_query
+    Input:
+      database_id (REQUIRED, int)
+      sql         (REQUIRED, string)
+
+    Ví dụ:
+      { "database_id": 1, "sql": "SELECT symbol, company_name, sector FROM demo.companies ORDER BY symbol" }
+      { "database_id": 1, "sql": "SELECT symbol, close_price, volume, trade_date FROM demo.stock_prices ORDER BY trade_date DESC LIMIT 10" }
+      { "database_id": 1, "sql": "SELECT portfolio_name, owner, total_value FROM demo.portfolios ORDER BY total_value DESC" }
+    => Lấy database_id từ: superset_database_list
+
+33. superset_sqllab_get_saved_queries
+    Input: (không có tham số)
+
+34. superset_sqllab_format_sql
+    Input:
+      sql (REQUIRED, string)
+
+    Ví dụ:
+      { "sql": "select symbol,close_price,volume,trade_date from demo.stock_prices where symbol='VNM' order by trade_date desc limit 10" }
+      { "sql": "SELECT c.symbol,c.company_name,sp.close_price,sp.volume FROM demo.companies c JOIN demo.stock_prices sp ON c.symbol=sp.symbol ORDER BY sp.trade_date DESC" }
+
+35. superset_sqllab_get_results
+    Input:
+      key (REQUIRED, string)
+
+    Ví dụ:
+      { "key": "abc123xyz" }
+    => key lấy từ kết quả execute_query async
+
+36. superset_sqllab_estimate_query_cost
+    Input:
+      database_id (REQUIRED, int)
+      sql         (REQUIRED, string)
+      schema      (optional, string)
+
+    Ví dụ:
+      { "database_id": 1, "sql": "SELECT * FROM demo.stock_prices", "schema": "demo" }
+      { "database_id": 1, "sql": "SELECT symbol, SUM(volume) FROM demo.stock_prices GROUP BY symbol", "schema": "demo" }
+
+37. superset_sqllab_export_query_results
+    Input:
+      client_id (REQUIRED, string)
+
+    Ví dụ:
+      { "client_id": "WUaiDDgf" }
+    => client_id lấy từ kết quả execute_query
+
+38. superset_sqllab_get_bootstrap_data
+    Input: (không có tham số)
+
+--------------------------------------------------------------------------------
+NHÓM QUERY
+--------------------------------------------------------------------------------
+
+39. superset_query_list
+    Input: (không có tham số)
+
+40. superset_query_get_by_id
+    Input:
+      query_id (REQUIRED, int)
+
+    Ví dụ:
+      { "query_id": 1 }
+    => Lấy ID từ: superset_query_list
+
+41. superset_query_stop
+    Input:
+      client_id (REQUIRED, string)
+
+    Ví dụ:
+      { "client_id": "WUaiDDgf" }
+
+--------------------------------------------------------------------------------
+NHÓM SAVED QUERY
+--------------------------------------------------------------------------------
+
+42. superset_saved_query_get_by_id
+    Input:
+      query_id (REQUIRED, int)
+
+    Ví dụ:
+      { "query_id": 1 }
+    => Lấy ID từ: superset_sqllab_get_saved_queries
+
+43. superset_saved_query_create [DISABLED — read-only mode]
+
+--------------------------------------------------------------------------------
+NHÓM TAG
+--------------------------------------------------------------------------------
+
+44. superset_tag_list
+    Input: (không có tham số)
+
+45. superset_tag_get_by_id
+    Input:
+      tag_id (REQUIRED, int)
+
+    Ví dụ:
+      { "tag_id": 1 }
+    => Lấy ID từ: superset_tag_list
+
+46. superset_tag_objects
+    Input: (không có tham số)
+
+
+--------------------------------------------------------------------------------
+NHÓM EXPLORE
+--------------------------------------------------------------------------------
+
+50. superset_explore_form_data_create  [DISABLED — read-only mode]
+
+51. superset_explore_form_data_get
+    Input:
+      key (REQUIRED, string)
+
+    Ví dụ:
+      { "key": "abc123" }
+    => key từ form_data_create
+
+52. superset_explore_permalink_create  [DISABLED — read-only mode]
+
+53. superset_explore_permalink_get
+    Input:
+      key (REQUIRED, string)
+
+    Ví dụ:
+      { "key": "xYz789" }
+
+--------------------------------------------------------------------------------
+NHÓM SYSTEM
+--------------------------------------------------------------------------------
+
+54. superset_config_get_base_url
+    Input: (không có tham số)
+
+55. superset_menu_get
+    Input: (không có tham số)
+
+56. superset_advanced_data_type_list
+    Input: (không có tham số)
+
+57. superset_advanced_data_type_convert
+    Input:
+      type_name (REQUIRED, string)
+      value     (REQUIRED, any)
+
+    Ví dụ:
+      { "type_name": "port", "value": "8080" }
+
+--------------------------------------------------------------------------------
+NHÓM USER
+--------------------------------------------------------------------------------
+
+58. superset_user_get_current
+    Input: (không có tham số)
+
+59. superset_user_get_roles
+    Input: (không có tham số)
+
+60. superset_activity_get_recent
+    Input: (không có tham số)
+
+================================================================================
+GHI CHÚ CHUNG
+================================================================================
+
+Luồng khám phá DB chuẩn với Trino (mysql.demo):
+  1. list_catalogs                              → ["memory","mysql","system"]
+  2. list_schemas(catalog="mysql")              → ["demo","information_schema",...]
+  3. list_tables(catalog="mysql",schema="demo") → [bonds,companies,dividends,...]
+  4. sample_table("mysql.demo.stock_prices")    → schema + 5 rows + stats
+  5. execute_query("SELECT ...")                → query thực tế
+
+Luồng chuẩn với Superset:
+  1. superset_auth_authenticate_user  → lấy token
+  2. superset_database_list           → lấy database_id
+  3. superset_sqllab_execute_query    → chạy SQL với demo data
+  4. superset_dashboard_list          → duyệt dashboards
+  5. superset_chart_list              → duyệt charts
+
+================================================================================

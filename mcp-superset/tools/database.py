@@ -33,28 +33,8 @@ async def superset_database_get_by_id(ctx: Context, database_id: int) -> Dict[st
     return await make_api_request(ctx, "get", f"{DATABASE_BASE}/{database_id}")
 
 
-@mcp.tool()
-@requires_auth
-@handle_api_errors
-async def superset_database_create(
-    ctx: Context,
-    engine: str,
-    configuration_method: str,
-    database_name: str,
-    sqlalchemy_uri: str,
-) -> Dict[str, Any]:
-    """Create a new database connection in Superset."""
-    payload = {
-        "engine": engine,
-        "configuration_method": configuration_method,
-        "database_name": database_name,
-        "sqlalchemy_uri": sqlalchemy_uri,
-        "allow_dml": True,
-        "allow_cvas": True,
-        "allow_ctas": True,
-        "expose_in_sqllab": True,
-    }
-    return await make_api_request(ctx, "post", DATABASE_BASE, data=payload)
+# @mcp.tool()
+# async def superset_database_create(...): hidden — read-only mode
 
 
 @mcp.tool()
@@ -83,22 +63,11 @@ async def superset_database_test_connection(
     return await make_api_request(ctx, "post", DATABASE_TEST, data=database_data)
 
 
-@mcp.tool()
-@requires_auth
-@handle_api_errors
-async def superset_database_update(
-    ctx: Context, database_id: int, data: Dict[str, Any]
-) -> Dict[str, Any]:
-    """Update an existing database connection."""
-    return await make_api_request(ctx, "put", f"{DATABASE_BASE}/{database_id}", data=data)
+# @mcp.tool()
+# async def superset_database_update(...): hidden — read-only mode
 
-
-@mcp.tool()
-@requires_auth
-@handle_api_errors
-async def superset_database_delete(ctx: Context, database_id: int) -> Dict[str, Any]:
-    """Delete a database connection."""
-    return await delete_with_confirmation_async(ctx, f"{DATABASE_BASE}/{database_id}", "Database", database_id)
+# @mcp.tool()
+# async def superset_database_delete(...): hidden — read-only mode
 
 
 @mcp.tool()

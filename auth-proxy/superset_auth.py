@@ -69,15 +69,13 @@ async def _login_with_azure_token(azure_token: str) -> tuple[str, str]:
                 return access_token, None
             return "", "No access_token in Superset response"
 
-        # Superset not yet configured for OAuth — fall back to admin
         if resp.status_code in (400, 422):
-            log.warning(
-                "[superset] OAuth provider endpoint rejected token (status=%d) — "
-                "Superset may not have AUTH_TYPE=AUTH_OAUTH configured yet. "
-                "Falling back to admin credentials.",
+            log.error(
+                "[superset] OAuth provider endpoint rejected token (status=%d). "
+                "Ensure Superset has AUTH_TYPE=AUTH_OAUTH configured.",
                 resp.status_code,
             )
-            return await _login_with_admin_credentials()
+            return "", f"Superset OAuth login failed ({resp.status_code}): {resp.text[:200]}"
 
         log.error("[superset] Azure token exchange failed: %d %s", resp.status_code, resp.text[:200])
         return "", f"Login failed: {resp.status_code}"

@@ -152,8 +152,8 @@ def _sep(label: str = "") -> None:
 
 
 async def _get_superset_jwt() -> str | None:
-    """Get a valid Superset JWT, refreshing if needed."""
-    token, error = await get_superset_token(token_state.get("access_token"))
+    """Get a valid Superset JWT using admin service account credentials."""
+    token, error = await get_superset_token(None)
     if error and not token:
         log.warning("[superset-forward] Failed to get Superset JWT: %s", error)
         return None
@@ -323,17 +323,16 @@ async def handle_get_superset_token(msg: dict) -> dict:
     if tool_name in _SUPERSET_FORWARD_TOOL_NAMES:
         if not token_valid():
             if not await refresh_token():
-                if not token_state["access_token"]:
-                    if not token_state["polling"]:
-                        await start_device_code_flow()
-                    return {
-                        "jsonrpc": "2.0",
-                        "id": msg.get("id"),
-                        "result": {
-                            "content": [{"type": "text", "text": login_message()}],
-                            "isError": False,
-                        },
-                    }
+                if not token_state["polling"]:
+                    await start_device_code_flow()
+                return {
+                    "jsonrpc": "2.0",
+                    "id": msg.get("id"),
+                    "result": {
+                        "content": [{"type": "text", "text": login_message()}],
+                        "isError": False,
+                    },
+                }
         return await _forward_to_superset_mcp(msg)
 
     # get_superset_token — handled locally

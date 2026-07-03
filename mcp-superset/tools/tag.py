@@ -39,35 +39,11 @@ async def superset_tag_objects(ctx: Context) -> Dict[str, Any]:
     return await make_api_request(ctx, "get", TAG_GET_OBJECTS)
 
 
-@mcp.tool()
-@requires_auth
-@handle_api_errors
-async def superset_tag_delete(ctx: Context, tag_id: int) -> Dict[str, Any]:
-    """Delete a tag."""
-    return await delete_with_confirmation_async(ctx, f"{TAG_BASE}/{tag_id}", "Tag", tag_id)
+# @mcp.tool()
+# async def superset_tag_delete(...): hidden — read-only mode
 
+# @mcp.tool()
+# async def superset_tag_object_add(...): hidden — read-only mode
 
-@mcp.tool()
-@requires_auth
-@handle_api_errors
-async def superset_tag_object_add(
-    ctx: Context, object_type: str, object_id: int, tag_name: str
-) -> Dict[str, Any]:
-    """Add a tag to an object."""
-    payload = {"object_type": object_type, "object_id": object_id, "tag_name": tag_name}
-    return await make_api_request(ctx, "post", TAG_OBJECTS, data=payload)
-
-
-@mcp.tool()
-@requires_auth
-@handle_api_errors
-async def superset_tag_object_remove(
-    ctx: Context, object_type: str, object_id: int, tag_name: str
-) -> Dict[str, Any]:
-    """Remove a tag from an object."""
-    response = await make_api_request(
-        ctx, "delete", f"{TAG_BASE}/{object_type}/{object_id}", params={"tag_name": tag_name}
-    )
-    if not response.get("error"):
-        return {"message": f"Tag '{tag_name}' removed from {object_type} {object_id} successfully"}
-    return response
+# @mcp.tool()
+# async def superset_tag_object_remove(...): hidden — read-only mode
