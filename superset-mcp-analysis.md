@@ -161,6 +161,10 @@ superset-mcp/
 - **`handle_api_errors` decorator** - Consistent error handling
 
 ### Authentication Flow
+
+> Kiến trúc auth per-user Azure AD (OAuth2 resource-server) được tách riêng ra
+> [auth-architecture.md](auth-architecture.md).
+
 1. Load stored token từ `.superset_token` file
 2. Verify token bằng cách gọi `/api/v1/me/`
 3. Nếu invalid → refresh token qua `/api/v1/security/refresh`
