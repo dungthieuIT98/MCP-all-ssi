@@ -152,8 +152,8 @@ def _sep(label: str = "") -> None:
 
 
 async def _get_superset_jwt() -> str | None:
-    """Get a valid Superset JWT using admin service account credentials."""
-    token, error = await get_superset_token(None)
+    """Get a valid per-user Superset JWT by exchanging the caller's Azure AD token."""
+    token, error = await get_superset_token(token_state.get("access_token"))
     if error and not token:
         log.warning("[superset-forward] Failed to get Superset JWT: %s", error)
         return None

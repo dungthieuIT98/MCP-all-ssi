@@ -55,6 +55,27 @@ def get_superset_context(ctx: Context) -> SupersetContext:
     return ctx.request_context.lifespan_context
 
 
+def get_caller_token(ctx: Context) -> Optional[str]:
+    """Extract the caller's Bearer token from the incoming HTTP request.
+
+    In streamable-http mode the MCP SDK sets request_context.request to the
+    Starlette Request, so we can read the per-user Authorization header the
+    auth-proxy forwards. This is the per-user Superset JWT — using it (instead of
+    the shared admin token) preserves the real user's identity, roles, and RLS.
+    Returns None when no request/header is available (e.g. stdio mode).
+    """
+    try:
+        request = ctx.request_context.request
+        if request is None:
+            return None
+        auth = request.headers.get("authorization", "")
+    except (AttributeError, LookupError):
+        return None
+    if auth.lower().startswith("bearer "):
+        return auth[7:].strip() or None
+    return None
+
+
 async def create_superset_context() -> SupersetContext:
     """Create a new SupersetContext with HTTP client."""
     from utils.constants import USER_ME

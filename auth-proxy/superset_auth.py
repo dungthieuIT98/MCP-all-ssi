@@ -38,7 +38,13 @@ async def get_superset_token(azure_access_token: str = None) -> tuple[str, str]:
 
 
 async def _login_with_azure_token(azure_token: str) -> tuple[str, str]:
-    """Exchange Azure AD token for Superset JWT via OAuth provider endpoint."""
+    """Exchange Azure AD token for a per-user Superset JWT.
+
+    Superset's browser OAuth flow can't be driven over REST, so we hit the custom
+    /api/v1/security/azure_login endpoint (defined in superset_config.py). It verifies
+    the Azure token against Azure's JWKS, auto-provisions the user, and mints a FAB JWT
+    for THAT user — preserving per-user identity, roles, RLS, and audit in Superset.
+    """
     # Use a hash of the token as cache key so we don't store the raw token
     cache_key = f"azure_{hash(azure_token)}"
 
@@ -50,11 +56,8 @@ async def _login_with_azure_token(azure_token: str) -> tuple[str, str]:
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.post(
-                f"{SUPERSET_URL}/api/v1/security/login",
-                json={
-                    "provider": "oauth",
-                    "access_token": azure_token,
-                },
+                f"{SUPERSET_URL}/api/v1/security/azure_login",
+                json={"access_token": azure_token},
             )
 
         if resp.status_code == 200:
@@ -69,16 +72,15 @@ async def _login_with_azure_token(azure_token: str) -> tuple[str, str]:
                 return access_token, None
             return "", "No access_token in Superset response"
 
-        if resp.status_code in (400, 422):
+        if resp.status_code == 404:
             log.error(
-                "[superset] OAuth provider endpoint rejected token (status=%d). "
-                "Ensure Superset has AUTH_TYPE=AUTH_OAUTH configured.",
-                resp.status_code,
+                "[superset] azure_login endpoint not found (404). "
+                "Ensure superset_config.py defines FLASK_APP_MUTATOR with /api/v1/security/azure_login."
             )
-            return "", f"Superset OAuth login failed ({resp.status_code}): {resp.text[:200]}"
+            return "", "Superset azure_login endpoint missing (404)"
 
         log.error("[superset] Azure token exchange failed: %d %s", resp.status_code, resp.text[:200])
-        return "", f"Login failed: {resp.status_code}"
+        return "", f"Azure login failed ({resp.status_code}): {resp.text[:200]}"
 
     except Exception as exc:
         log.error("[superset] Azure token exchange error: %s", exc)

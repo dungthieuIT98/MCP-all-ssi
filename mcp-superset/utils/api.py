@@ -10,6 +10,7 @@ from mcp.server.fastmcp import Context
 from client import (
     SupersetContext,
     authenticate_user,
+    get_caller_token,
     get_superset_context,
     refresh_access_token,
 )
@@ -40,10 +41,16 @@ async def get_csrf_token(ctx: Context) -> Optional[str]:
 async def with_auto_refresh(
     ctx: Context, api_call: Callable[[], Awaitable[httpx.Response]]
 ) -> httpx.Response:
-    """Execute API call with automatic token refresh on 401."""
-    superset_ctx = get_superset_context(ctx)
+    """Execute API call with automatic token refresh on 401.
 
-    if not superset_ctx.access_token:
+    When the caller forwarded a per-user token, a 401 must NOT fall back to the
+    admin service account — that would silently escalate privileges and lose the
+    user's identity. In that case we surface the 401 for the caller to re-auth.
+    """
+    superset_ctx = get_superset_context(ctx)
+    caller_token = get_caller_token(ctx)
+
+    if not caller_token and not superset_ctx.access_token:
         from fastapi import HTTPException
 
         raise HTTPException(status_code=401, detail="Not authenticated")
@@ -60,7 +67,12 @@ async def with_auto_refresh(
     except Exception:
         raise
 
-    # Token expired, try refresh
+    # Per-user token expired/invalid — do NOT fall back to admin. Surface the 401.
+    if caller_token:
+        logger.info("Per-user token got 401; not falling back to admin service account.")
+        return response
+
+    # Service-account path: token expired, try refresh then re-login
     logger.info("Received 401 Unauthorized. Attempting to refresh token...")
     refresh_result = await refresh_access_token(superset_ctx)
 
@@ -87,6 +99,7 @@ async def make_api_request(
     """Make an API request to Superset with optional auto-refresh."""
     superset_ctx = get_superset_context(ctx)
     client = superset_ctx.client
+    caller_token = get_caller_token(ctx)
 
     # Get CSRF token for non-GET requests
     if method.lower() != "get" and not superset_ctx.csrf_token:
@@ -94,11 +107,15 @@ async def make_api_request(
 
     async def make_request() -> httpx.Response:
         headers = {}
+        # Per-user identity: when the caller forwarded a token, use it for THIS
+        # request, overriding the shared client's admin Authorization header.
+        if caller_token:
+            headers["Authorization"] = f"Bearer {caller_token}"
         if method.lower() != "get" and superset_ctx.csrf_token:
             headers["X-CSRFToken"] = superset_ctx.csrf_token
 
         if method.lower() == "get":
-            return await client.get(endpoint, params=params)
+            return await client.get(endpoint, params=params, headers=headers)
         elif method.lower() == "post":
             return await client.post(endpoint, json=data, params=params, headers=headers)
         elif method.lower() == "put":
