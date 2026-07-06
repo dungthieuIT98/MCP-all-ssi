@@ -11,7 +11,9 @@ TENANT_ID = os.environ.get("OAUTH_TENANT_ID", "0314c27a-7092-4151-8bbb-f71b64029
 CLIENT_ID = os.environ.get("OAUTH_CLIENT_ID")
 
 AUTH_TYPE = AUTH_OAUTH
-AUTH_USER_REGISTRATION = True
+# Chỉ user đã tồn tại trong Superset mới được truy cập. Không tự tạo user mới
+# (áp dụng cho cả browser OAuth flow lẫn endpoint azure_login bên dưới).
+AUTH_USER_REGISTRATION = False
 AUTH_USER_REGISTRATION_ROLE = "Gamma"
 AUTH_ROLES_SYNC_AT_LOGIN = True
 
@@ -103,17 +105,9 @@ def _azure_login_view():
     sm = current_app.appbuilder.sm
     user = sm.find_user(email=email) or sm.find_user(username=email)
     if user is None:
-        role = sm.find_role(sm.auth_user_registration_role)
-        user = sm.add_user(
-            username=email,
-            first_name=claims.get("given_name", "") or email.split("@")[0],
-            last_name=claims.get("family_name", "") or "",
-            email=email,
-            role=role,
-        )
-        if not user:
-            return jsonify({"message": "Failed to provision user"}), 500
-        log.info("[azure_login] provisioned new user=%s role=%s", email, sm.auth_user_registration_role)
+        # Không auto-provision. Chỉ user đã tồn tại trong Superset mới được truy cập.
+        log.warning("[azure_login] access denied — no Superset user for email=%s", email)
+        return jsonify({"message": "User not registered in Superset. Contact an administrator."}), 403
 
     if not user.is_active:
         return jsonify({"message": "User is inactive"}), 403

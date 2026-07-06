@@ -81,7 +81,11 @@ services:
   superset:
     build:
       context: .
-      dockerfile: superset.Dockerfile
+      dockerfile_inline: |
+        FROM apache/superset:latest
+        USER root
+        RUN /app/.venv/bin/python -m ensurepip && /app/.venv/bin/python -m pip install --quiet authlib sqlalchemy-trino
+        USER superset
     container_name: superset
     hostname: superset
     ports:
@@ -98,7 +102,7 @@ services:
       - OAUTH_TENANT_ID=${AZURE_TENANT_ID}
     volumes:
       - superset-data:/app/superset_home
-      - ./superset_config.py:/app/superset_home/superset_config.py
+      - ./mcp-superset/superset_config.py:/app/superset_home/superset_config.py
     networks:
       - trino-net
     healthcheck:

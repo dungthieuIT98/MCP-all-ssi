@@ -15,7 +15,8 @@ User (Azure token)
 ## 3 bước
 
 1. **Superset** (`superset_config.py`) — endpoint `POST /api/v1/security/azure_login`:
-   verify Azure JWT (JWKS), auto-tạo user nếu chưa có (role `Gamma`), trả per-user Superset JWT.
+   verify Azure JWT (JWKS), **chỉ chấp nhận user đã tồn tại** trong Superset (không auto-tạo),
+   trả per-user Superset JWT. User chưa đăng ký → 403.
 
 2. **auth-proxy** (`superset_auth.py`, `superset_handlers.py`) — đổi Azure token qua
    `azure_login`, forward JWT per-user xuống mcp-superset.
