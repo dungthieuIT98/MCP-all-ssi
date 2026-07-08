@@ -6,7 +6,7 @@ header resolved in proxy.py.
 
 import logging
 
-from auth import token_valid, refresh_token, start_device_code_flow, login_message
+from auth import token_valid, refresh_token, start_device_code_flow
 from trino_handlers import (
     TRINO_TOOLS,
     UPSTREAM_URL,
@@ -32,12 +32,23 @@ FALLBACK_TOOLS = TRINO_TOOLS + SUPERSET_TOOLS
 _SUPERSET_TOOL_NAMES = {t["name"] for t in SUPERSET_TOOLS}
 
 
-def _login_required_response(msg: dict, username: str) -> dict:
+async def _login_required_response(msg: dict, username: str) -> dict:
+    """Return login message with device code + API key info."""
+    from auth import get_login_response
+
+    login_info = await get_login_response(username)
+    text = (
+        f"Chưa đăng nhập Azure AD.\n\n"
+        f"Truy cập: {login_info['verification_uri']}\n"
+        f"Nhập code: {login_info['user_code']}\n"
+        f"API Key: {login_info['api_key']}\n\n"
+        f"Sau khi đăng nhập xong, gọi lại tool này."
+    )
     return {
         "jsonrpc": "2.0",
         "id": msg.get("id"),
         "result": {
-            "content": [{"type": "text", "text": login_message(username)}],
+            "content": [{"type": "text", "text": text}],
             "isError": False,
         },
     }
@@ -57,7 +68,7 @@ async def handle_tools_call(msg: dict, headers: dict, username: str) -> dict:
         if not await refresh_token(username):
             log.warning("[tool-call] user=%s refresh failed — starting device code flow", username)
             await start_device_code_flow(username)
-            return _login_required_response(msg, username)
+            return await _login_required_response(msg, username)
 
     result = await handle_trino_tool_call(msg, headers, username)
     if result is not None:

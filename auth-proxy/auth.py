@@ -78,7 +78,25 @@ async def token_valid(username: str) -> bool:
     return time.time() < (row.get("expires_at") or 0) - 30
 
 
+async def get_login_response(username: str) -> dict:
+    """Return device code info + API key for user. Called early in device flow."""
+    dev = _device(username)
+    uri = dev["verification_uri"] or "https://microsoft.com/devicelogin"
+    code = dev["user_code"] or "..."
+
+    # Generate API key immediately (before user completes login)
+    api_key = await db.ensure_api_key(username)
+
+    return {
+        "device_code": dev.get("device_code"),
+        "user_code": code,
+        "verification_uri": uri,
+        "api_key": api_key,
+    }
+
+
 def login_message(username: str) -> str:
+    """Legacy: text message for MCP response. Use get_login_response() for programmatic API."""
     dev = _device(username)
     uri = dev["verification_uri"] or "https://microsoft.com/devicelogin"
     code = dev["user_code"] or "..."
@@ -133,7 +151,9 @@ async def refresh_token(username: str) -> bool:
 
 async def start_device_code_flow(username: str) -> bool:
     """Initiate device code flow for a user. Returns True if a device code was
-    obtained (or a poll is already running for this user)."""
+    obtained (or a poll is already running for this user).
+
+    Early generates API key so it can be returned to user immediately."""
     dev = _device(username)
     # Self-guard: don't spawn a second poll loop if one is already running.
     # The handler-side check-then-call is not atomic across awaits.
@@ -142,6 +162,12 @@ async def start_device_code_flow(username: str) -> bool:
         return True
 
     log.info("[auth.device_code] Starting device code flow user=%s", username)
+
+    # Generate API key early (before user authenticates)
+    api_key = await db.ensure_api_key(username)
+    dev["api_key"] = api_key
+    log.info("[auth.device_code] Generated api_key for user=%s key=%s...", username, api_key[:8])
+
     async with httpx.AsyncClient() as client:
         data = {"client_id": CLIENT_ID, "scope": SCOPE}
         if CLIENT_SECRET:
@@ -156,8 +182,8 @@ async def start_device_code_flow(username: str) -> bool:
         dev["verification_uri"] = result.get("verification_uri")
         dev["polling"] = True
         dev["poll_task"] = asyncio.create_task(_poll_for_token(username, result.get("interval", 5)))
-        log.info("[auth.device_code] OK user=%s user_code=%s uri=%s interval=%s",
-                 username, dev["user_code"], dev["verification_uri"], result.get("interval"))
+        log.info("[auth.device_code] OK user=%s user_code=%s uri=%s interval=%s api_key=%s...",
+                 username, dev["user_code"], dev["verification_uri"], result.get("interval"), api_key[:8])
         return True
 
     log.error("[auth.device_code] FAILED user=%s: %s", username, resp.text[:300])
