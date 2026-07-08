@@ -1,10 +1,12 @@
 """
 MCP dispatcher — routes requests to trino_handlers or superset_handlers.
+Every handler is username-aware; identity comes from the X-Consumer-Username
+header resolved in proxy.py.
 """
 
 import logging
 
-from auth import token_state, token_valid, refresh_token, start_device_code_flow, login_message
+from auth import token_valid, refresh_token, start_device_code_flow, login_message
 from trino_handlers import (
     TRINO_TOOLS,
     UPSTREAM_URL,
@@ -17,8 +19,8 @@ from trino_handlers import (
 from superset_handlers import SUPERSET_TOOLS, handle_get_superset_token
 
 
-async def handle_tools_list(msg: dict, headers: dict) -> dict:
-    data = await _trino_handle_tools_list(msg, headers)
+async def handle_tools_list(msg: dict, headers: dict, username: str) -> dict:
+    data = await _trino_handle_tools_list(msg, headers, username)
     if "result" in data and "tools" in data["result"]:
         data["result"]["tools"] = data["result"]["tools"] + SUPERSET_TOOLS
     return data
@@ -30,45 +32,38 @@ FALLBACK_TOOLS = TRINO_TOOLS + SUPERSET_TOOLS
 _SUPERSET_TOOL_NAMES = {t["name"] for t in SUPERSET_TOOLS}
 
 
-def _login_required_response(msg: dict) -> dict:
+def _login_required_response(msg: dict, username: str) -> dict:
     return {
         "jsonrpc": "2.0",
         "id": msg.get("id"),
         "result": {
-            "content": [{"type": "text", "text": login_message()}],
+            "content": [{"type": "text", "text": login_message(username)}],
             "isError": False,
         },
     }
 
 
-async def handle_tools_call(msg: dict, headers: dict) -> dict:
+async def handle_tools_call(msg: dict, headers: dict, username: str) -> dict:
     tool_name = msg.get("params", {}).get("name", "<unknown>")
 
     log.info("─" * 60 + f" handle_tools_call  tool={tool_name}")
-    log.info("[tool-call] id=%s  session=%s  tool=%s",
-             msg.get("id"),
-             headers.get("mcp-session-id") or token_state.get("upstream_session_id"),
-             tool_name)
+    log.info("[tool-call] id=%s  user=%s  tool=%s", msg.get("id"), username, tool_name)
 
     if tool_name in _SUPERSET_TOOL_NAMES:
-        return await handle_get_superset_token(msg)
+        return await handle_get_superset_token(msg, username)
 
-    if not token_state["access_token"] or not token_valid():
-        log.warning("[tool-call] no valid token — starting device code flow")
-        if not token_state["polling"]:
-            await start_device_code_flow()
-        return _login_required_response(msg)
+    if not await token_valid(username):
+        log.warning("[tool-call] user=%s no valid token — attempting refresh", username)
+        if not await refresh_token(username):
+            log.warning("[tool-call] user=%s refresh failed — starting device code flow", username)
+            await start_device_code_flow(username)
+            return _login_required_response(msg, username)
 
-    if not token_valid():
-        log.warning("[tool-call] token expired — attempting refresh")
-        if not await refresh_token():
-            return _login_required_response(msg)
-
-    result = await handle_trino_tool_call(msg, headers)
+    result = await handle_trino_tool_call(msg, headers, username)
     if result is not None:
         return result
 
-    log.error("[tool-call] all attempts failed for tool=%s", tool_name)
+    log.error("[tool-call] all attempts failed for tool=%s user=%s", tool_name, username)
     return {
         "jsonrpc": "2.0",
         "id": msg.get("id"),

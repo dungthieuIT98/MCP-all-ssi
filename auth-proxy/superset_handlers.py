@@ -9,7 +9,8 @@ import os
 
 import httpx
 
-from auth import token_state, token_valid, refresh_token, start_device_code_flow, login_message
+import db
+from auth import token_valid, refresh_token, start_device_code_flow, login_message
 from superset_auth import get_superset_token
 
 log = logging.getLogger("auth-proxy")
@@ -144,16 +145,13 @@ _SUPERSET_FORWARD_TOOL_NAMES = {
     t["name"] for t in SUPERSET_TOOLS if t["name"] != "get_superset_token"
 }
 
-_superset_mcp_session_id: str | None = None
-
-
 def _sep(label: str = "") -> None:
     log.info("─" * 60 + (" " + label if label else ""))
 
 
-async def _get_superset_jwt() -> str | None:
+async def _get_superset_jwt(azure_token: str | None) -> str | None:
     """Get a valid per-user Superset JWT by exchanging the caller's Azure AD token."""
-    token, error = await get_superset_token(token_state.get("access_token"))
+    token, error = await get_superset_token(azure_token)
     if error and not token:
         log.warning("[superset-forward] Failed to get Superset JWT: %s", error)
         return None
@@ -180,12 +178,11 @@ def _parse_sse_response(text: str, msg: dict) -> dict:
     }
 
 
-async def _ensure_superset_session(jwt: str) -> bool:
-    """Send initialize request to mcp-superset to establish a session."""
-    global _superset_mcp_session_id
-
-    if _superset_mcp_session_id:
-        return True
+async def _ensure_superset_session(username: str, jwt: str) -> str | None:
+    """Ensure a per-user mcp-superset session exists; return the session id."""
+    existing = await db.get_superset_session(username)
+    if existing:
+        return existing
 
     init_msg = {
         "jsonrpc": "2.0",
@@ -207,21 +204,19 @@ async def _ensure_superset_session(jwt: str) -> bool:
             resp = await client.post(SUPERSET_MCP_URL, content=json.dumps(init_msg).encode(), headers=headers)
         session_id = resp.headers.get("mcp-session-id")
         if session_id:
-            _superset_mcp_session_id = session_id
-            log.info("[superset-session] initialized session_id=%s", session_id)
-            return True
-        log.warning("[superset-session] initialize returned no session id, status=%d", resp.status_code)
-        return False
+            await db.set_superset_session(username, session_id)
+            log.info("[superset-session] user=%s initialized session_id=%s", username, session_id)
+            return session_id
+        log.warning("[superset-session] user=%s initialize returned no session id, status=%d", username, resp.status_code)
+        return None
     except httpx.RequestError as exc:
-        log.error("[superset-session] initialize failed: %s", exc)
-        return False
+        log.error("[superset-session] user=%s initialize failed: %s", username, exc)
+        return None
 
 
-async def _forward_to_superset_mcp(msg: dict) -> dict | None:
-    """Forward a tool call to mcp-superset, injecting Superset JWT as auth."""
-    global _superset_mcp_session_id
-
-    superset_jwt = await _get_superset_jwt()
+async def _forward_to_superset_mcp(msg: dict, username: str, azure_token: str | None) -> dict | None:
+    """Forward a tool call to mcp-superset, injecting the per-user Superset JWT."""
+    superset_jwt = await _get_superset_jwt(azure_token)
     if not superset_jwt:
         return {
             "jsonrpc": "2.0",
@@ -232,7 +227,8 @@ async def _forward_to_superset_mcp(msg: dict) -> dict | None:
             },
         }
 
-    if not await _ensure_superset_session(superset_jwt):
+    session_id = await _ensure_superset_session(username, superset_jwt)
+    if not session_id:
         return {
             "jsonrpc": "2.0",
             "id": msg.get("id"),
@@ -246,15 +242,14 @@ async def _forward_to_superset_mcp(msg: dict) -> dict | None:
         "Content-Type": "application/json",
         "Accept": "application/json, text/event-stream",
         "Authorization": f"Bearer {superset_jwt}",
+        "Mcp-Session-Id": session_id,
     }
-    if _superset_mcp_session_id:
-        fwd_headers["Mcp-Session-Id"] = _superset_mcp_session_id
 
     body = json.dumps(msg).encode()
 
     _sep("REQUEST → mcp-superset")
-    log.info("[superset-forward] POST %s  tool=%s",
-             SUPERSET_MCP_URL, msg.get("params", {}).get("name", "?"))
+    log.info("[superset-forward] POST %s  user=%s tool=%s",
+             SUPERSET_MCP_URL, username, msg.get("params", {}).get("name", "?"))
 
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
@@ -274,8 +269,8 @@ async def _forward_to_superset_mcp(msg: dict) -> dict | None:
 
     # Track session ID for subsequent calls
     new_session = resp.headers.get("mcp-session-id")
-    if new_session:
-        _superset_mcp_session_id = new_session
+    if new_session and new_session != session_id:
+        await db.set_superset_session(username, new_session)
 
     if resp.status_code == 200:
         try:
@@ -288,10 +283,11 @@ async def _forward_to_superset_mcp(msg: dict) -> dict | None:
 
     # Session expired or missing — reset and retry once
     if resp.status_code == 400 and "session" in resp.text.lower():
-        log.warning("[superset-forward] session invalid, resetting and retrying")
-        _superset_mcp_session_id = None
-        if await _ensure_superset_session(superset_jwt):
-            fwd_headers["Mcp-Session-Id"] = _superset_mcp_session_id
+        log.warning("[superset-forward] user=%s session invalid, resetting and retrying", username)
+        await db.set_superset_session(username, None)
+        retry_session = await _ensure_superset_session(username, superset_jwt)
+        if retry_session:
+            fwd_headers["Mcp-Session-Id"] = retry_session
             try:
                 async with httpx.AsyncClient(timeout=30.0) as client:
                     resp = await client.post(SUPERSET_MCP_URL, content=body, headers=fwd_headers)
@@ -315,48 +311,44 @@ async def _forward_to_superset_mcp(msg: dict) -> dict | None:
     }
 
 
-async def handle_get_superset_token(msg: dict) -> dict:
+async def handle_get_superset_token(msg: dict, username: str) -> dict:
     """Route Superset tool calls: get_superset_token handled locally, rest forwarded."""
     tool_name = msg.get("params", {}).get("name", "")
 
+    def _login_prompt():
+        return {
+            "jsonrpc": "2.0",
+            "id": msg.get("id"),
+            "result": {
+                "content": [{"type": "text", "text": login_message(username)}],
+                "isError": False,
+            },
+        }
+
     # Forward read-only tools to mcp-superset
     if tool_name in _SUPERSET_FORWARD_TOOL_NAMES:
-        if not token_valid():
-            if not await refresh_token():
-                if not token_state["polling"]:
-                    await start_device_code_flow()
-                return {
-                    "jsonrpc": "2.0",
-                    "id": msg.get("id"),
-                    "result": {
-                        "content": [{"type": "text", "text": login_message()}],
-                        "isError": False,
-                    },
-                }
-        return await _forward_to_superset_mcp(msg)
+        if not await token_valid(username):
+            if not await refresh_token(username):
+                await start_device_code_flow(username)
+                return _login_prompt()
+        row = await db.get_tokens(username)
+        azure_token = row.get("access_token") if row else None
+        return await _forward_to_superset_mcp(msg, username, azure_token)
 
     # get_superset_token — handled locally
     _sep("handle_get_superset_token")
 
-    if not token_valid():
-        log.info("[superset-token] Azure AD token not valid, attempting refresh")
-        if not await refresh_token():
-            if not token_state["access_token"]:
-                if not token_state["polling"]:
-                    await start_device_code_flow()
-                return {
-                    "jsonrpc": "2.0",
-                    "id": msg.get("id"),
-                    "result": {
-                        "content": [{"type": "text", "text": login_message()}],
-                        "isError": False,
-                    },
-                }
+    if not await token_valid(username):
+        log.info("[superset-token] user=%s Azure AD token not valid, attempting refresh", username)
+        if not await refresh_token(username):
+            await start_device_code_flow(username)
+            return _login_prompt()
 
-    azure_token = token_state.get("access_token")
+    row = await db.get_tokens(username)
+    azure_token = row.get("access_token") if row else None
     user_email = None
-    if token_state.get("token_claims"):
-        claims = token_state["token_claims"]
+    claims = row.get("token_claims") if row else None
+    if claims:
         user_email = claims.get("upn") or claims.get("email") or claims.get("preferred_username")
 
     log.info("[superset-token] Exchanging Azure token for Superset JWT, user=%s", user_email)

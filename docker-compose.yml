@@ -1,4 +1,23 @@
 services:
+  # ── Postgres (auth-proxy per-user token store) ────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: authproxy-postgres
+    hostname: postgres
+    environment:
+      - POSTGRES_USER=${PG_USER:-authproxy}
+      - POSTGRES_PASSWORD=${PG_PASSWORD:-authproxy_pw}
+      - POSTGRES_DB=${PG_DB:-authproxy}
+    volumes:
+      - authproxy-pgdata:/var/lib/postgresql/data
+    networks:
+      - trino-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PG_USER:-authproxy} -d ${PG_DB:-authproxy}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # ── MySQL ─────────────────────────────────────────────────────────
   mysql:
     image: mysql:8.0
@@ -47,8 +66,8 @@ services:
       context: ./mcp-trino
       dockerfile: Dockerfile
     container_name: trino-mcp
-    ports:
-      - "6274:8080"
+    expose:
+      - "8080"
     environment:
       - TRINO_HOST=trino
       - TRINO_PORT=8080
@@ -130,8 +149,8 @@ services:
       context: ./mcp-superset
       dockerfile: Dockerfile
     container_name: superset-mcp
-    ports:
-      - "6276:8000"
+    expose:
+      - "8000"
     environment:
       - SUPERSET_BASE_URL=http://superset:8088
       - SUPERSET_USERNAME=${SUPERSET_ADMIN_USERNAME}
@@ -154,12 +173,32 @@ services:
       - ./auth-proxy/.env
     environment:
       - UPSTREAM_URL=http://trino-mcp:8080/mcp
+      - DATABASE_URL=postgresql://${PG_USER:-authproxy}:${PG_PASSWORD:-authproxy_pw}@postgres:5432/${PG_DB:-authproxy}
     ports:
       - "6275:6275"
     volumes:
       - auth-proxy-cache:/app/cache
     depends_on:
-      - trino-mcp
+      trino-mcp:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+    networks:
+      - trino-net
+    restart: unless-stopped
+
+  # ── Kong Gateway ──────────────────────────────────────────────────
+  kong:
+    build:
+      context: ./kong
+      dockerfile: Dockerfile
+    container_name: kong
+    hostname: kong
+    ports:
+      - "8000:8000"
+      - "8001:8001"
+    depends_on:
+      - auth-proxy
     networks:
       - trino-net
     restart: unless-stopped
@@ -168,6 +207,7 @@ volumes:
   mysql-data:
   auth-proxy-cache:
   superset-data:
+  authproxy-pgdata:
 
 networks:
   trino-net:
