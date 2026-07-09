@@ -2,8 +2,8 @@ _format_version: "3.0"
 _transform: true
 
 # Kong is a bare reverse proxy — no auth plugin, no consumers. Identity and
-# key validation happen in auth-proxy itself via the X-Profile-Key header
-# (see proxy.py:_resolve_username / db.get_username_by_api_key).
+# key validation happen in auth-proxy itself via the X-Api-Key header
+# (see proxy.py:_resolve_api_key / db.get_by_api_key).
 services:
   - name: auth-proxy
     url: http://auth-proxy:6275
@@ -30,5 +30,5 @@ services:
           headers:
             - Authorization
             - Content-Type
-            - X-Profile-Key
+            - X-Api-Key
           credentials: true

@@ -1,7 +1,7 @@
 """
 Trino MCP handlers — forward requests to upstream trino-mcp.
-Every handler is username-aware: the Bearer token and upstream MCP session id
-are looked up per-user from Postgres (see db.py).
+Every handler is keyed by api_key: the Bearer token and upstream MCP session id
+are looked up per-key from Postgres (see db.py).
 """
 
 import json
@@ -11,7 +11,8 @@ import os
 import httpx
 
 import db
-from auth import token_valid, refresh_token
+from auth import token_valid
+from azure import refresh_token
 
 log = logging.getLogger("auth-proxy")
 
@@ -40,17 +41,17 @@ def _sep(label: str = "") -> None:
     log.info("─" * 60 + (" " + label if label else ""))
 
 
-async def _access_token(username: str) -> str | None:
-    row = await db.get_tokens(username)
+async def _access_token(api_key: str) -> str | None:
+    row = await db.get_by_api_key(api_key)
     return row.get("access_token") if row else None
 
 
-async def _reinitialize(username: str) -> bool:
-    """Get a fresh session ID from upstream for this user."""
-    if not await token_valid(username):
-        if not await refresh_token(username):
+async def _reinitialize(api_key: str) -> bool:
+    """Get a fresh session ID from upstream for this api_key."""
+    if await token_valid(api_key) != 1:
+        if not await refresh_token(api_key):
             return False
-    token = await _access_token(username)
+    token = await _access_token(api_key)
     fwd_headers = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {token}",
@@ -65,20 +66,20 @@ async def _reinitialize(username: str) -> bool:
     if resp.status_code == 200:
         session_id = resp.headers.get("mcp-session-id")
         if session_id:
-            await db.set_upstream_session(username, session_id)
-            log.info("[reinit] OK user=%s new session_id=%s", username, session_id)
+            await db.set_upstream_session(api_key, session_id)
+            log.info("[reinit] OK key=%s new session_id=%s", api_key, session_id)
             return True
-    log.warning("[reinit] FAILED user=%s status=%s body=%s", username, resp.status_code, resp.text[:200])
+    log.warning("[reinit] FAILED key=%s status=%s body=%s", api_key, resp.status_code, resp.text[:200])
     return False
 
 
-async def forward_to_upstream(body: bytes, headers: dict, username: str) -> httpx.Response | None:
-    if not await token_valid(username):
-        if not await refresh_token(username):
-            log.error("[forward] user=%s token invalid and refresh failed — aborting", username)
+async def forward_to_upstream(body: bytes, headers: dict, api_key: str) -> httpx.Response | None:
+    if await token_valid(api_key) != 1:
+        if not await refresh_token(api_key):
+            log.error("[forward] key=%s token invalid and refresh failed — aborting", api_key)
             return None
 
-    token = await _access_token(username)
+    token = await _access_token(api_key)
     fwd_headers = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {token}",
@@ -86,12 +87,13 @@ async def forward_to_upstream(body: bytes, headers: dict, username: str) -> http
     if "mcp-session-id" in headers:
         fwd_headers["Mcp-Session-Id"] = headers["mcp-session-id"]
     else:
-        session_id = await db.get_upstream_session(username)
+        row = await db.get_by_api_key(api_key)
+        session_id = row.get("upstream_session_id") if row else None
         if session_id:
             fwd_headers["Mcp-Session-Id"] = session_id
 
     _sep("REQUEST → upstream")
-    log.info("[forward] POST %s user=%s", UPSTREAM_URL, username)
+    log.info("[forward] POST %s key=%s", UPSTREAM_URL, api_key)
     log.info("[forward] Mcp-Session-Id: %s", fwd_headers.get("Mcp-Session-Id", "<none>"))
     log.info("[forward] Authorization: Bearer %s...", (token or "")[:30])
     try:
@@ -142,9 +144,10 @@ async def forward_to_upstream(body: bytes, headers: dict, username: str) -> http
     _sep()
 
     if resp.status_code == 400 and "Invalid session" in resp.text:
-        log.warning("[forward] user=%s invalid session — reinitializing and retrying", username)
-        if await _reinitialize(username):
-            new_session = await db.get_upstream_session(username)
+        log.warning("[forward] key=%s invalid session — reinitializing and retrying", api_key)
+        if await _reinitialize(api_key):
+            row = await db.get_by_api_key(api_key)
+            new_session = row.get("upstream_session_id") if row else None
             if new_session:
                 fwd_headers["Mcp-Session-Id"] = new_session
             async with httpx.AsyncClient(timeout=60.0) as client:
@@ -152,50 +155,50 @@ async def forward_to_upstream(body: bytes, headers: dict, username: str) -> http
             log.info("[forward] retry status=%d", resp.status_code)
 
     if resp.status_code == 401:
-        log.warning("[forward] user=%s upstream 401 — token rejected: %s", username, resp.text[:300])
+        log.warning("[forward] key=%s upstream 401 — token rejected: %s", api_key, resp.text[:300])
         return None
 
     return resp
 
 
-async def handle_initialize(msg: dict, headers: dict, username: str) -> dict:
+async def handle_initialize(msg: dict, headers: dict, api_key: str) -> dict:
     _sep("handle_initialize")
-    log.info("[init] client sent initialize  id=%s user=%s", msg.get("id"), username)
+    log.info("[init] client sent initialize  id=%s key=%s", msg.get("id"), api_key)
 
-    if not await token_valid(username):
-        log.info("[init] user=%s token not valid, attempting refresh", username)
-        await refresh_token(username)
+    if await token_valid(api_key) != 1:
+        log.info("[init] key=%s token not valid, attempting refresh", api_key)
+        await refresh_token(api_key)
 
-    if await token_valid(username):
+    if await token_valid(api_key) == 1:
         body = json.dumps(msg).encode()
-        resp = await forward_to_upstream(body, headers, username)
+        resp = await forward_to_upstream(body, headers, api_key)
         if resp and resp.status_code == 200:
             try:
                 result = resp.json()
                 session_id = resp.headers.get("mcp-session-id")
                 if session_id:
-                    await db.set_upstream_session(username, session_id)
-                    log.info("[init] user=%s upstream session_id=%s", username, session_id)
+                    await db.set_upstream_session(api_key, session_id)
+                    log.info("[init] key=%s upstream session_id=%s", api_key, session_id)
                 log.info("[init] forwarded OK, returning upstream result")
                 return result
             except Exception as exc:
                 log.error("[init] JSON parse error: %s", exc)
     else:
-        log.warning("[init] user=%s not authenticated — returning local SERVER_INFO", username)
+        log.warning("[init] key=%s not authenticated — returning local SERVER_INFO", api_key)
 
     return {"jsonrpc": "2.0", "id": msg.get("id"), "result": SERVER_INFO}
 
 
-async def handle_tools_list(msg: dict, headers: dict, username: str) -> dict:
+async def handle_tools_list(msg: dict, headers: dict, api_key: str) -> dict:
     global _cached_tools
     _sep("handle_tools_list")
-    log.info("[tools/list] id=%s user=%s", msg.get("id"), username)
+    log.info("[tools/list] id=%s key=%s", msg.get("id"), api_key)
 
     from superset_handlers import SUPERSET_TOOLS
 
-    if await token_valid(username):
+    if await token_valid(api_key) == 1:
         body = json.dumps(msg).encode()
-        resp = await forward_to_upstream(body, headers, username)
+        resp = await forward_to_upstream(body, headers, api_key)
         if resp and resp.status_code == 200:
             try:
                 data = resp.json()
@@ -212,14 +215,14 @@ async def handle_tools_list(msg: dict, headers: dict, username: str) -> dict:
         else:
             log.warning("[tools/list] upstream failed — falling back to cache/static")
     else:
-        log.warning("[tools/list] user=%s not authenticated — using fallback tools", username)
+        log.warning("[tools/list] key=%s not authenticated — using fallback tools", api_key)
 
     tools = (_cached_tools or TRINO_TOOLS) + SUPERSET_TOOLS
     log.info("[tools/list] returning %d tools (fallback)", len(tools))
     return {"jsonrpc": "2.0", "id": msg.get("id"), "result": {"tools": tools}}
 
 
-async def handle_trino_tool_call(msg: dict, headers: dict, username: str) -> dict:
+async def handle_trino_tool_call(msg: dict, headers: dict, api_key: str) -> dict:
     """Forward a Trino tool call to upstream. Assumes token check already done."""
     params = msg.get("params", {})
     tool_name = params.get("name", "<unknown>")
@@ -235,7 +238,7 @@ async def handle_trino_tool_call(msg: dict, headers: dict, username: str) -> dic
         log.info("[tool-call] args=%s", json.dumps(tool_args, ensure_ascii=False)[:400])
 
     body = json.dumps(msg).encode()
-    resp = await forward_to_upstream(body, headers, username)
+    resp = await forward_to_upstream(body, headers, api_key)
     if resp and resp.status_code == 200:
         try:
             data = resp.json()
@@ -250,8 +253,8 @@ async def handle_trino_tool_call(msg: dict, headers: dict, username: str) -> dic
             return data
         except Exception as exc:
             log.error("[tool-call] ← JSON parse error: %s  raw=%s", exc, resp.text[:300])
-    elif resp is None and await _access_token(username):
-        log.error("[tool-call] ← upstream returned None (401) for tool=%s user=%s", tool_name, username)
+    elif resp is None and await _access_token(api_key):
+        log.error("[tool-call] ← upstream returned None (401) for tool=%s key=%s", tool_name, api_key)
         return {
             "jsonrpc": "2.0",
             "id": msg.get("id"),
@@ -267,11 +270,11 @@ async def handle_trino_tool_call(msg: dict, headers: dict, username: str) -> dic
     return None
 
 
-async def handle_notifications(msg: dict, headers: dict, username: str):
+async def handle_notifications(msg: dict, headers: dict, api_key: str):
     method = msg.get("method", "")
-    log.info("[notify] method=%s user=%s", method, username)
-    if await token_valid(username):
+    log.info("[notify] method=%s key=%s", method, api_key)
+    if await token_valid(api_key) == 1:
         body = json.dumps(msg).encode()
-        await forward_to_upstream(body, headers, username)
+        await forward_to_upstream(body, headers, api_key)
     else:
-        log.warning("[notify] user=%s skipped (not authenticated)", username)
+        log.warning("[notify] key=%s skipped (not authenticated)", api_key)
