@@ -1,23 +1,4 @@
 services:
-  # ── Postgres (auth-proxy per-user token store) ────────────────────
-  postgres:
-    image: postgres:16-alpine
-    container_name: authproxy-postgres
-    hostname: postgres
-    environment:
-      - POSTGRES_USER=${PG_USER:-authproxy}
-      - POSTGRES_PASSWORD=${PG_PASSWORD:-authproxy_pw}
-      - POSTGRES_DB=${PG_DB:-authproxy}
-    volumes:
-      - authproxy-pgdata:/var/lib/postgresql/data
-    networks:
-      - trino-net
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${PG_USER:-authproxy} -d ${PG_DB:-authproxy}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
   # ── MySQL ─────────────────────────────────────────────────────────
   mysql:
     image: mysql:8.0
@@ -70,8 +51,8 @@ services:
       context: ./mcp-trino
       dockerfile: Dockerfile
     container_name: trino-mcp
-    expose:
-      - "8080"
+    ports:
+      - "6274:8080"
     environment:
       - TRINO_HOST=trino
       - TRINO_PORT=8080
@@ -90,6 +71,7 @@ services:
         condition: service_healthy
     networks:
       - trino-net
+    restart: unless-stopped
     healthcheck:
       # trino-mcp only exposes /status, /mcp, /sse — /status needs no OAuth
       # (see mcp-trino/internal/mcp/server.go:handleStatus). alpine ships wget via busybox.
@@ -99,125 +81,8 @@ services:
       retries: 5
       start_period: 20s
 
-  # ── Superset ──────────────────────────────────────────────────────
-  superset:
-    build:
-      context: .
-      dockerfile_inline: |
-        FROM apache/superset:latest
-        USER root
-        RUN /app/.venv/bin/python -m ensurepip && /app/.venv/bin/python -m pip install --quiet authlib sqlalchemy-trino
-        USER superset
-    container_name: superset
-    hostname: superset
-    ports:
-      - "8088:8088"
-    environment:
-      - SUPERSET_SECRET_KEY=${SUPERSET_SECRET_KEY}
-      - SUPERSET_ADMIN_USERNAME=${SUPERSET_ADMIN_USERNAME}
-      - SUPERSET_ADMIN_PASSWORD=${SUPERSET_ADMIN_PASSWORD}
-      - SUPERSET_ADMIN_EMAIL=${SUPERSET_ADMIN_EMAIL}
-      - SUPERSET_CONFIG_PATH=/app/superset_home/superset_config.py
-      # Azure AD OAuth
-      - OAUTH_CLIENT_ID=${AZURE_CLIENT_ID}
-      - OAUTH_CLIENT_SECRET=${AZURE_CLIENT_SECRET}
-      - OAUTH_TENANT_ID=${AZURE_TENANT_ID}
-    volumes:
-      - superset-data:/app/superset_home
-      - ./mcp-superset/superset_config.py:/app/superset_home/superset_config.py
-    networks:
-      - trino-net
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8088/health"]
-      interval: 15s
-      timeout: 10s
-      retries: 10
-    command:
-      - sh
-      - -c
-      - >-
-        superset db upgrade &&
-        superset fab create-admin
-          --username $$SUPERSET_ADMIN_USERNAME
-          --firstname Admin
-          --lastname User
-          --email $$SUPERSET_ADMIN_EMAIL
-          --password $$SUPERSET_ADMIN_PASSWORD 2>/dev/null || true &&
-        superset init &&
-        superset run -h 0.0.0.0 -p 8088
-
-  # ── Superset MCP ──────────────────────────────────────────────────
-  superset-mcp:
-    build:
-      context: ./mcp-superset
-      dockerfile: Dockerfile
-    container_name: superset-mcp
-    expose:
-      - "8000"
-    environment:
-      - SUPERSET_BASE_URL=http://superset:8088
-      - SUPERSET_USERNAME=${SUPERSET_ADMIN_USERNAME}
-      - SUPERSET_PASSWORD=${SUPERSET_ADMIN_PASSWORD}
-    depends_on:
-      superset:
-        condition: service_healthy
-    networks:
-      - trino-net
-    restart: unless-stopped
-
-  # ── Auth Proxy ────────────────────────────────────────────────────
-  auth-proxy:
-    build:
-      context: ./auth-proxy
-      dockerfile: Dockerfile
-    container_name: auth-proxy
-    env_file:
-      - ./.env
-      - ./auth-proxy/.env
-    environment:
-      - UPSTREAM_URL=http://trino-mcp:8080/mcp
-      - DATABASE_URL=postgresql://${PG_USER:-authproxy}:${PG_PASSWORD:-authproxy_pw}@postgres:5432/${PG_DB:-authproxy}
-    ports:
-      - "6275:6275"
-    volumes:
-      - auth-proxy-cache:/app/cache
-    depends_on:
-      trino-mcp:
-        condition: service_healthy
-      postgres:
-        condition: service_healthy
-    networks:
-      - trino-net
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:6275/')"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 15s
-
-  # ── Kong Gateway ──────────────────────────────────────────────────
-  kong:
-    build:
-      context: ./kong
-      dockerfile: Dockerfile
-    container_name: kong
-    hostname: kong
-    ports:
-      - "8000:8000"
-      - "8001:8001"
-    depends_on:
-      auth-proxy:
-        condition: service_healthy
-    networks:
-      - trino-net
-    restart: unless-stopped
-
 volumes:
   mysql-data:
-  auth-proxy-cache:
-  superset-data:
-  authproxy-pgdata:
 
 networks:
   trino-net:

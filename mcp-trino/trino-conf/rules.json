@@ -1,0 +1,24 @@
+{
+  "catalogs": [
+    {
+      "catalog": ".*",
+      "allow": "read-only"
+    }
+  ],
+  "tables": [
+    {
+      "user": "(demoA|demoB)@ssi\\.com\\.vn",
+      "catalog": "mysql",
+      "schema": ".*",
+      "table": "bonds",
+      "privileges": ["SELECT"]
+    },
+    {
+      "user": "(demoA|demoB)@ssi\\.com\\.vn",
+      "privileges": []
+    },
+    {
+      "privileges": ["SELECT"]
+    }
+  ]
+}

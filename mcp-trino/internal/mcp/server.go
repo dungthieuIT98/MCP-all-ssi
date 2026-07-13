@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -19,6 +20,32 @@ import (
 // after authenticating the caller. mcp-trino trusts it as-is and does not
 // verify it — the gateway MUST strip any client-supplied value for this header.
 const userEmailHeader = "X-User-Email"
+
+// requiredEmailDomainPrefix is the prefix the email's domain (the part after
+// "@") must start with when impersonation is enabled. This accepts every SSI
+// address — user@ssi, user@ssi.com.vn, user@ssi.vn — while rejecting missing or
+// foreign-domain emails with 401 before they reach the MCP layer.
+const requiredEmailDomainPrefix = "ssi"
+
+// validateUserEmail enforces that the X-User-Email header is present and its
+// domain belongs to SSI. Returns the trimmed email and an empty reason on
+// success, or an empty email and a human-readable reason on failure.
+func validateUserEmail(r *http.Request) (email, reason string) {
+	email = strings.TrimSpace(r.Header.Get(userEmailHeader))
+	if email == "" {
+		return "", "missing " + userEmailHeader + " header"
+	}
+	at := strings.LastIndex(email, "@")
+	if at < 0 || at == len(email)-1 {
+		return "", "invalid email in " + userEmailHeader + " header"
+	}
+	domain := strings.ToLower(email[at+1:])
+	// Domain must be exactly "ssi" or an "ssi.*" subdomain — not "ssix.com".
+	if domain != requiredEmailDomainPrefix && !strings.HasPrefix(domain, requiredEmailDomainPrefix+".") {
+		return "", "email must belong to the SSI domain (@ssi...)"
+	}
+	return email, ""
+}
 
 // Server represents the MCP server with all components
 type Server struct {
@@ -145,6 +172,19 @@ func (s *Server) createMCPHandler(streamableServer *mcpserver.StreamableHTTPServ
 		if r.Method == "OPTIONS" {
 			w.WriteHeader(http.StatusOK)
 			return
+		}
+
+		// When impersonation is enabled every caller must present a valid
+		// X-User-Email header (an @ssi address). Reject anything else with 401
+		// before it can reach the MCP layer and fall back to the default user.
+		if s.config.EnableImpersonation {
+			if _, reason := validateUserEmail(r); reason != "" {
+				log.Printf("MCP %s %s from %s rejected: %s", r.Method, r.URL.Path, r.RemoteAddr, reason)
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusUnauthorized)
+				_, _ = fmt.Fprintf(w, `{"error":"unauthorized","message":%q}`, reason)
+				return
+			}
 		}
 
 		log.Printf("MCP %s %s from %s", r.Method, r.URL.Path, r.RemoteAddr)
