@@ -1,4 +1,0 @@
-httpx
-uvicorn
-starlette
-psycopg[binary,pool]

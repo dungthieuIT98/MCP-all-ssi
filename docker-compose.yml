@@ -81,16 +81,12 @@ services:
       - TRINO_SCHEME=http
       - MCP_TRANSPORT=http
       - MCP_PORT=8080
-      # OAuth Azure AD
+      # OAuth Azure AD (native mode: server only validates JWTs, client authenticates directly with Azure AD)
       - OAUTH_ENABLED=true
-      - OAUTH_MODE=proxy
+      - OAUTH_MODE=native
       - OAUTH_PROVIDER=azure
       - OIDC_ISSUER=https://sts.windows.net/${AZURE_TENANT_ID}/
       - OIDC_AUDIENCE=${AZURE_CLIENT_ID}
-      - OIDC_CLIENT_ID=${AZURE_CLIENT_ID}
-      - OIDC_CLIENT_SECRET=${AZURE_CLIENT_SECRET}
-      - OAUTH_REDIRECT_URI=http://localhost:6274/oauth/callback
-      - JWT_SECRET=${JWT_SECRET}
       # Impersonation
       - TRINO_ENABLE_IMPERSONATION=true
       - TRINO_IMPERSONATION_FIELD=email
