@@ -190,11 +190,10 @@ async def handle_initialize(msg: dict, headers: dict, api_key: str) -> dict:
 
 
 async def handle_tools_list(msg: dict, headers: dict, api_key: str) -> dict:
+    """Return the Trino tool list only — mcp_handlers merges SUPERSET_TOOLS on top."""
     global _cached_tools
     _sep("handle_tools_list")
     log.info("[tools/list] id=%s key=%s", msg.get("id"), api_key)
-
-    from superset_handlers import SUPERSET_TOOLS
 
     if await token_valid(api_key) == 1:
         body = json.dumps(msg).encode()
@@ -205,10 +204,6 @@ async def handle_tools_list(msg: dict, headers: dict, api_key: str) -> dict:
                 if "result" in data and "tools" in data["result"]:
                     _cached_tools = data["result"]["tools"]
                     log.info("[tools/list] got %d tools from upstream", len(_cached_tools))
-                    merged = data["result"]["tools"] + SUPERSET_TOOLS
-                    log.info("[tools/list] returning %d tools (trino=%d + superset=%d)",
-                             len(merged), len(data["result"]["tools"]), len(SUPERSET_TOOLS))
-                    data["result"]["tools"] = merged
                 return data
             except Exception as exc:
                 log.error("[tools/list] JSON parse error: %s", exc)
@@ -217,8 +212,8 @@ async def handle_tools_list(msg: dict, headers: dict, api_key: str) -> dict:
     else:
         log.warning("[tools/list] key=%s not authenticated — using fallback tools", api_key)
 
-    tools = (_cached_tools or TRINO_TOOLS) + SUPERSET_TOOLS
-    log.info("[tools/list] returning %d tools (fallback)", len(tools))
+    tools = _cached_tools or TRINO_TOOLS
+    log.info("[tools/list] returning %d trino tools (fallback)", len(tools))
     return {"jsonrpc": "2.0", "id": msg.get("id"), "result": {"tools": tools}}
 
 

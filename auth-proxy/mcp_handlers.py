@@ -56,7 +56,20 @@ async def handle_tools_call(msg: dict, headers: dict, api_key: str) -> dict:
                 "[tool-call] key=%s refresh failed — starting device code flow",
                 api_key,
             )
-            _, new_api_key = await start_device_code_flow(api_key)
+            ok, new_api_key = await start_device_code_flow(api_key)
+            if not ok:
+                return {
+                    "jsonrpc": "2.0",
+                    "id": msg.get("id"),
+                    "result": {
+                        "content": [{
+                            "type": "text",
+                            "text": "Khong the ket noi Azure AD de bat dau dang nhap. "
+                                    "Kiem tra mang/cau hinh roi thu lai.",
+                        }],
+                        "isError": True,
+                    },
+                }
             return _login_required_response(msg, new_api_key)
 
     if tool_name in _SUPERSET_TOOL_NAMES:

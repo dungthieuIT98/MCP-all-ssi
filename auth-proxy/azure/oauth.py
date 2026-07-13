@@ -63,15 +63,19 @@ async def refresh_token(api_key: str) -> bool:
 	if not refresh:
 		return False
 
-	async with httpx.AsyncClient() as client:
-		data = {
-			"client_id": CLIENT_ID,
-			"grant_type": "refresh_token",
-			"refresh_token": refresh,
-			"scope": SCOPE,
-		}
-		log.info("[auth.refresh] POST %s grant=refresh_token key=%s", TOKEN_URL, api_key)
-		resp = await client.post(TOKEN_URL, data=data)
+	try:
+		async with httpx.AsyncClient() as client:
+			data = {
+				"client_id": CLIENT_ID,
+				"grant_type": "refresh_token",
+				"refresh_token": refresh,
+				"scope": SCOPE,
+			}
+			log.info("[auth.refresh] POST %s grant=refresh_token key=%s", TOKEN_URL, api_key)
+			resp = await client.post(TOKEN_URL, data=data)
+	except httpx.HTTPError as exc:
+		log.error("[auth.refresh] key=%s network error: %s", api_key, exc)
+		return False
 
 	log.info("[auth.refresh] key=%s status=%d", api_key, resp.status_code)
 	if resp.status_code == 200:
@@ -110,11 +114,15 @@ async def start_device_code_flow(api_key: str | None = None) -> tuple[bool, str]
 
 	log.info("[auth.device_code] Starting device code flow key=%s", api_key)
 
-	async with httpx.AsyncClient() as client:
-		data = {"client_id": CLIENT_ID, "scope": SCOPE}
-		if CLIENT_SECRET:
-			data["client_secret"] = CLIENT_SECRET
-		resp = await client.post(DEVICE_CODE_URL, data=data)
+	try:
+		async with httpx.AsyncClient() as client:
+			data = {"client_id": CLIENT_ID, "scope": SCOPE}
+			if CLIENT_SECRET:
+				data["client_secret"] = CLIENT_SECRET
+			resp = await client.post(DEVICE_CODE_URL, data=data)
+	except httpx.HTTPError as exc:
+		log.error("[auth.device_code] key=%s network error: %s", api_key, exc)
+		return False, api_key
 
 	log.info("[auth.device_code] key=%s status=%d", api_key, resp.status_code)
 	if resp.status_code == 200:
