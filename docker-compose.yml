@@ -81,15 +81,10 @@ services:
       - TRINO_SCHEME=http
       - MCP_TRANSPORT=http
       - MCP_PORT=8080
-      # OAuth Azure AD (native mode: server only validates JWTs, client authenticates directly with Azure AD)
-      - OAUTH_ENABLED=true
-      - OAUTH_MODE=native
-      - OAUTH_PROVIDER=azure
-      - OIDC_ISSUER=https://sts.windows.net/${AZURE_TENANT_ID}/
-      - OIDC_AUDIENCE=${AZURE_CLIENT_ID}
-      # Impersonation
+      # Impersonation: principal comes from the X-User-Email header, which MUST
+      # be set (and stripped from client input) by a trusted upstream gateway
+      # (e.g. Kong/auth-proxy) that has already authenticated the caller.
       - TRINO_ENABLE_IMPERSONATION=true
-      - TRINO_IMPERSONATION_FIELD=email
     depends_on:
       trino:
         condition: service_healthy

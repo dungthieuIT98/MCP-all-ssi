@@ -11,7 +11,7 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"github.com/tuannvm/mcp-trino/internal/trino"
+	"gitlab.ssi.com.vn/dto-data/mcp_server_trino/internal/trino"
 )
 
 // TrinoClient interface defines the methods we need from trino.Client

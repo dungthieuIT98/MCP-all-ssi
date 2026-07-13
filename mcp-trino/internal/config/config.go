@@ -25,27 +25,17 @@ type TrinoConfig struct {
 	QueryTimeout      time.Duration // Query execution timeout
 	MaxRows           int           // Maximum number of rows returned per query (0 = unlimited)
 
-	// OAuth mode configuration
-	OAuthEnabled  bool   // Enable OAuth 2.1 authentication
-	OAuthMode     string // OAuth operational mode: "native" or "proxy"
-	OAuthProvider string // OAuth provider: "hmac", "okta", "google", "azure"
-	JWTSecret     string // JWT signing secret for HMAC provider
-
-	// OIDC provider configuration
-	OIDCIssuer        string // OIDC issuer URL
-	OIDCAudience      string // OIDC audience
-	OIDCClientID      string // OIDC client ID
-	OIDCClientSecret  string // OIDC client secret
-	OAuthRedirectURIs string // OAuth redirect URIs - single URI or comma-separated list
-
 	// Allowlist configuration for filtering catalogs, schemas, and tables
 	AllowedCatalogs []string // List of allowed catalogs (empty means no filtering)
 	AllowedSchemas  []string // List of allowed schemas in catalog.schema format
 	AllowedTables   []string // List of allowed tables in catalog.schema.table format
 
 	// Impersonation configuration
-	EnableImpersonation bool   // Enable Trino user impersonation via X-Trino-User header
-	ImpersonationField  string // JWT field to use for impersonation: "username", "email", or "subject" (default: "username")
+	// EnableImpersonation trusts the X-User-Email header on incoming HTTP requests
+	// to determine the Trino principal. This header MUST be set (and stripped from
+	// client input) by a trusted upstream gateway (e.g. Kong) that has already
+	// authenticated the caller — mcp-trino does not verify it itself.
+	EnableImpersonation bool // Enable Trino user impersonation via X-User-Email → X-Trino-User
 
 	// Query attribution
 	TrinoSource string // Value for X-Trino-Source header (identifies query source to Trino)
@@ -71,28 +61,6 @@ func NewTrinoConfigWithVersion(version string) (*TrinoConfig, error) {
 	sslInsecure, _ := strconv.ParseBool(resolveEnv("TRINO_SSL_INSECURE", "true"))
 	scheme := resolveEnv("TRINO_SCHEME", "https")
 	allowWriteQueries, _ := strconv.ParseBool(resolveEnv("TRINO_ALLOW_WRITE_QUERIES", "false"))
-
-	// OAuth configuration - OAUTH_ENABLED is the single source of truth
-	oauthEnabled, _ := strconv.ParseBool(resolveEnv("OAUTH_ENABLED", "false"))
-	oauthMode := strings.ToLower(resolveEnv("OAUTH_MODE", "native"))
-	oauthProvider := strings.ToLower(resolveEnv("OAUTH_PROVIDER", "hmac"))
-	jwtSecret := resolveEnv("JWT_SECRET", "")
-
-	// OIDC configuration with secure defaults
-	oidcIssuer := resolveEnv("OIDC_ISSUER", "")
-	oidcAudience := resolveEnv("OIDC_AUDIENCE", "") // No default - must be explicitly configured
-	oidcClientID := resolveEnv("OIDC_CLIENT_ID", "")
-	oidcClientSecret := resolveEnv("OIDC_CLIENT_SECRET", "")
-
-	// Redirect URI configuration with backward compatibility
-	oauthRedirectURIs := resolveEnv("OAUTH_ALLOWED_REDIRECT_URIS", "")
-	if oauthRedirectURIs == "" {
-		deprecatedURI := resolveEnv("OAUTH_REDIRECT_URI", "")
-		if deprecatedURI != "" {
-			log.Println("WARNING: OAUTH_REDIRECT_URI is deprecated. Use OAUTH_ALLOWED_REDIRECT_URIS instead.")
-			oauthRedirectURIs = deprecatedURI
-		}
-	}
 
 	// Parse max rows from environment variable
 	const defaultMaxRows = 10000
@@ -131,7 +99,6 @@ func NewTrinoConfigWithVersion(version string) (*TrinoConfig, error) {
 
 	// Parse impersonation configuration
 	enableImpersonation, _ := strconv.ParseBool(resolveEnv("TRINO_ENABLE_IMPERSONATION", "false"))
-	impersonationField := strings.ToLower(resolveEnv("TRINO_IMPERSONATION_FIELD", "username"))
 
 	// Parse Trino source configuration with default
 	trinoSource := resolveEnv("TRINO_SOURCE", fmt.Sprintf("mcp-trino/%s", version))
@@ -158,40 +125,14 @@ func NewTrinoConfigWithVersion(version string) (*TrinoConfig, error) {
 		log.Println("WARNING: Write queries are enabled (TRINO_ALLOW_WRITE_QUERIES=true). SQL injection protection is bypassed.")
 	}
 
-	// Log OAuth status - detailed validation delegated to oauth-mcp-proxy
-	if oauthEnabled {
-		log.Printf("INFO: OAuth 2.1 enabled (mode: %s, provider: %s)", oauthMode, oauthProvider)
-
-		// Keep helpful setup warnings for user experience
-		if oauthProvider != "hmac" && oidcIssuer == "" {
-			log.Printf("WARNING: OIDC_ISSUER not set for %s provider. OAuth may fail.", oauthProvider)
-		}
-		if oauthMode == "proxy" && oauthProvider != "hmac" && oidcClientSecret == "" {
-			log.Printf("WARNING: OIDC_CLIENT_SECRET not set for proxy mode with %s provider.", oauthProvider)
-		}
-		if oauthMode == "proxy" && oauthRedirectURIs == "" {
-			log.Printf("WARNING: No OAuth redirect URIs configured for proxy mode.")
-		}
-	} else {
-		log.Println("INFO: OAuth disabled. Set OAUTH_ENABLED=true to activate.")
-	}
-
 	// Log allowlist configuration
 	logAllowlistConfiguration(allowedCatalogs, allowedSchemas, allowedTables)
-
-	// Validate impersonation field
-	validFields := map[string]bool{"username": true, "email": true, "subject": true}
-	if !validFields[impersonationField] {
-		return nil, fmt.Errorf("invalid TRINO_IMPERSONATION_FIELD '%s'. Supported fields: username, email, subject", impersonationField)
-	}
 
 	// Log impersonation configuration
 	if enableImpersonation {
 		log.Printf("INFO: Trino user impersonation enabled (TRINO_ENABLE_IMPERSONATION=true)")
-		log.Printf("INFO: Impersonation principal field: %s", impersonationField)
-		if !oauthEnabled {
-			log.Println("WARNING: Impersonation is enabled but OAuth is disabled. Impersonation requires OAuth to extract user information.")
-		}
+		log.Println("INFO: Principal is read from the X-User-Email request header")
+		log.Println("WARNING: X-User-Email is trusted as-is. It MUST be set (and stripped from client input) by a trusted upstream gateway that has already authenticated the caller.")
 	} else {
 		log.Println("INFO: Trino user impersonation disabled (TRINO_ENABLE_IMPERSONATION=false)")
 	}
@@ -247,20 +188,10 @@ func NewTrinoConfigWithVersion(version string) (*TrinoConfig, error) {
 		AllowWriteQueries:   allowWriteQueries,
 		QueryTimeout:        queryTimeout,
 		MaxRows:             maxRows,
-		OAuthEnabled:        oauthEnabled,
-		OAuthMode:           oauthMode,
-		OAuthProvider:       oauthProvider,
-		JWTSecret:           jwtSecret,
-		OIDCIssuer:          oidcIssuer,
-		OIDCAudience:        oidcAudience,
-		OIDCClientID:        oidcClientID,
-		OIDCClientSecret:    oidcClientSecret,
-		OAuthRedirectURIs:   oauthRedirectURIs,
 		AllowedCatalogs:     allowedCatalogs,
 		AllowedSchemas:      allowedSchemas,
 		AllowedTables:       allowedTables,
 		EnableImpersonation: enableImpersonation,
-		ImpersonationField:  impersonationField,
 		TrinoSource:         trinoSource,
 		QueryCacheTTL:       queryCacheTTL,
 		MaxPreviewRows:      maxPreviewRows,

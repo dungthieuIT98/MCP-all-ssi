@@ -65,21 +65,18 @@ func TestNewTrinoConfigWithAllowlists(t *testing.T) {
 	originalCatalogs := os.Getenv("TRINO_ALLOWED_CATALOGS")
 	originalSchemas := os.Getenv("TRINO_ALLOWED_SCHEMAS")
 	originalTables := os.Getenv("TRINO_ALLOWED_TABLES")
-	originalOAuth := os.Getenv("OAUTH_ENABLED")
 
 	// Clean up after test
 	defer func() {
 		_ = os.Setenv("TRINO_ALLOWED_CATALOGS", originalCatalogs)
 		_ = os.Setenv("TRINO_ALLOWED_SCHEMAS", originalSchemas)
 		_ = os.Setenv("TRINO_ALLOWED_TABLES", originalTables)
-		_ = os.Setenv("OAUTH_ENABLED", originalOAuth)
 	}()
 
 	// Test with allowlists configured
 	_ = os.Setenv("TRINO_ALLOWED_CATALOGS", "hive,postgresql")
 	_ = os.Setenv("TRINO_ALLOWED_SCHEMAS", "hive.analytics,postgresql.public")
 	_ = os.Setenv("TRINO_ALLOWED_TABLES", "hive.analytics.users")
-	_ = os.Setenv("OAUTH_ENABLED", "false") // Disable OAuth for this test
 
 	config, err := NewTrinoConfig()
 	if err != nil {
@@ -107,21 +104,18 @@ func TestNewTrinoConfigWithoutAllowlists(t *testing.T) {
 	originalCatalogs := os.Getenv("TRINO_ALLOWED_CATALOGS")
 	originalSchemas := os.Getenv("TRINO_ALLOWED_SCHEMAS")
 	originalTables := os.Getenv("TRINO_ALLOWED_TABLES")
-	originalOAuth := os.Getenv("OAUTH_ENABLED")
 
 	// Clean up after test
 	defer func() {
 		_ = os.Setenv("TRINO_ALLOWED_CATALOGS", originalCatalogs)
 		_ = os.Setenv("TRINO_ALLOWED_SCHEMAS", originalSchemas)
 		_ = os.Setenv("TRINO_ALLOWED_TABLES", originalTables)
-		_ = os.Setenv("OAUTH_ENABLED", originalOAuth)
 	}()
 
 	// Clear allowlist environment variables
 	_ = os.Unsetenv("TRINO_ALLOWED_CATALOGS")
 	_ = os.Unsetenv("TRINO_ALLOWED_SCHEMAS")
 	_ = os.Unsetenv("TRINO_ALLOWED_TABLES")
-	_ = os.Setenv("OAUTH_ENABLED", "false") // Disable OAuth for this test
 
 	config, err := NewTrinoConfig()
 	if err != nil {
@@ -207,12 +201,9 @@ func TestValidateAllowlist(t *testing.T) {
 func TestNewTrinoConfigMaxRows(t *testing.T) {
 	// Save and restore env
 	origMaxRows := os.Getenv("TRINO_MAX_ROWS")
-	origOAuth := os.Getenv("OAUTH_ENABLED")
 	defer func() {
 		_ = os.Setenv("TRINO_MAX_ROWS", origMaxRows)
-		_ = os.Setenv("OAUTH_ENABLED", origOAuth)
 	}()
-	_ = os.Setenv("OAUTH_ENABLED", "false")
 
 	tests := []struct {
 		name     string
@@ -250,12 +241,9 @@ func TestNewTrinoConfigMaxRows(t *testing.T) {
 func TestNewTrinoConfigDefaultTimeout(t *testing.T) {
 	// Save and restore env
 	origTimeout := os.Getenv("TRINO_QUERY_TIMEOUT")
-	origOAuth := os.Getenv("OAUTH_ENABLED")
 	defer func() {
 		_ = os.Setenv("TRINO_QUERY_TIMEOUT", origTimeout)
-		_ = os.Setenv("OAUTH_ENABLED", origOAuth)
 	}()
-	_ = os.Setenv("OAUTH_ENABLED", "false")
 
 	// Test default timeout is 300s
 	_ = os.Unsetenv("TRINO_QUERY_TIMEOUT")
@@ -284,13 +272,11 @@ func TestNewTrinoConfigMalformedAllowlist(t *testing.T) {
 	// Save original environment
 	originalSchemas := os.Getenv("TRINO_ALLOWED_SCHEMAS")
 	originalTables := os.Getenv("TRINO_ALLOWED_TABLES")
-	originalOAuth := os.Getenv("OAUTH_ENABLED")
 
 	// Clean up after test
 	defer func() {
 		_ = os.Setenv("TRINO_ALLOWED_SCHEMAS", originalSchemas)
 		_ = os.Setenv("TRINO_ALLOWED_TABLES", originalTables)
-		_ = os.Setenv("OAUTH_ENABLED", originalOAuth)
 	}()
 
 	tests := []struct {
@@ -322,7 +308,6 @@ func TestNewTrinoConfigMalformedAllowlist(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_ = os.Setenv(tt.envVar, tt.value)
-			_ = os.Setenv("OAUTH_ENABLED", "false") // Disable OAuth for this test
 			_, err := NewTrinoConfig()
 
 			if err == nil {
@@ -342,7 +327,6 @@ func TestNewTrinoConfigMalformedAllowlist(t *testing.T) {
 func TestNewTrinoConfigReadsCredentialsFromEnv(t *testing.T) {
 	t.Setenv("TRINO_USER", "env-user")
 	t.Setenv("TRINO_PASSWORD", "env-pass")
-	t.Setenv("OAUTH_ENABLED", "false")
 
 	cfg, err := NewTrinoConfig()
 	if err != nil {

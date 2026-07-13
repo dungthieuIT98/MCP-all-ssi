@@ -14,8 +14,7 @@ import (
 	"time"
 
 	"github.com/trinodb/trino-go-client/trino"
-	"github.com/tuannvm/mcp-trino/internal/config"
-	oauth "github.com/tuannvm/oauth-mcp-proxy"
+	"gitlab.ssi.com.vn/dto-data/mcp_server_trino/internal/config"
 )
 
 // Pre-compiled regexes for read-only query detection
@@ -83,7 +82,20 @@ type contextKey string
 
 const (
 	impersonatedUserKey contextKey = "impersonated_user"
+	userEmailKey        contextKey = "user_email"
 )
+
+// WithUserEmail adds the caller's email (from the X-User-Email request header,
+// set by a trusted upstream gateway) to context.
+func WithUserEmail(ctx context.Context, email string) context.Context {
+	return context.WithValue(ctx, userEmailKey, email)
+}
+
+// GetUserEmail retrieves the caller's email from context.
+func GetUserEmail(ctx context.Context) (string, bool) {
+	email, ok := ctx.Value(userEmailKey).(string)
+	return email, ok
+}
 
 // headerRoundTripper adds X-Trino-Source and X-Trino-User headers to requests
 type headerRoundTripper struct {
@@ -297,27 +309,16 @@ func sanitizeQueryForKeywordDetection(query string) string {
 }
 
 // defaultAttributionUser is the fallback username used for query attribution
-// when no OAuth user identity is available.
+// when no user identity is available.
 const defaultAttributionUser = "mcp-trino-user"
 
-// getOAuthUserAndUsername returns the OAuth user (if any) and the display username
-// from context. This avoids redundant context lookups.
-func getOAuthUserAndUsername(ctx context.Context) (*oauth.User, string) {
-	user, exists := oauth.GetUserFromContext(ctx)
-	if !exists || user == nil {
-		return nil, defaultAttributionUser
+// attributionUsername returns the display username for query attribution
+// from context, falling back to defaultAttributionUser.
+func attributionUsername(ctx context.Context) string {
+	if email, ok := GetUserEmail(ctx); ok && email != "" {
+		return email
 	}
-	username := user.Username
-	if username == "" {
-		username = user.Email
-	}
-	if username == "" {
-		username = user.Subject
-	}
-	if username == "" {
-		username = defaultAttributionUser
-	}
-	return user, username
+	return defaultAttributionUser
 }
 
 // QueryResult holds query results along with metadata about truncation.
@@ -339,7 +340,7 @@ func (c *Client) ExecuteQuery(query string) ([]map[string]interface{}, error) {
 // ExecuteQueryWithContext executes a SQL query and returns the results
 // It supports both:
 // - User impersonation via X-Trino-User header (when EnableImpersonation is true)
-// - Query attribution via X-Trino-Client-Tags/Info/Source (from OAuth user context)
+// - Query attribution via X-Trino-Client-Tags/Info/Source (from the caller's email in context)
 func (c *Client) ExecuteQueryWithContext(ctx context.Context, query string) (*QueryResult, error) {
 	// Strip trailing semicolon that Trino doesn't allow
 	query = strings.TrimSuffix(strings.TrimSpace(query), ";")
@@ -374,15 +375,14 @@ func (c *Client) ExecuteQueryWithContext(ctx context.Context, query string) (*Qu
 	// Build query arguments for per-query user identity and attribution
 	// These are passed as NamedArgs to the Trino driver, which uses them to set
 	// session properties regardless of the authentication method.
-	_, userName := getOAuthUserAndUsername(ctx)
+	userName := attributionUsername(ctx)
 	queryArgs := []interface{}{
 		sql.Named("X-Trino-Client-Tags", userName),
 		sql.Named("X-Trino-Client-Info", userName),
 	}
 	// When impersonation is enabled, use the impersonated user from context
-	// (set by prepareImpersonationContext which respects ImpersonationField config)
-	// for X-Trino-User instead of the raw OAuth username, ensuring the correct
-	// identity is forwarded to Trino.
+	// (set by prepareImpersonationContext from the X-User-Email header)
+	// for X-Trino-User, ensuring the correct identity is forwarded to Trino.
 	if c.config.EnableImpersonation {
 		if impersonatedUser, ok := GetImpersonatedUser(ctx); ok && impersonatedUser != "" {
 			queryArgs = append(queryArgs, sql.Named("X-Trino-User", impersonatedUser))

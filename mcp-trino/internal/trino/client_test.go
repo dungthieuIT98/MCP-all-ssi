@@ -6,8 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tuannvm/mcp-trino/internal/config"
-	oauth "github.com/tuannvm/oauth-mcp-proxy"
+	"gitlab.ssi.com.vn/dto-data/mcp_server_trino/internal/config"
 )
 
 func TestFilterCatalogs(t *testing.T) {
@@ -594,40 +593,28 @@ func TestMaxRowsConfigPropagation(t *testing.T) {
 	}
 }
 
-func TestGetOAuthUserAndUsername(t *testing.T) {
+func TestAttributionUsername(t *testing.T) {
 	tests := []struct {
 		name         string
-		user         *oauth.User
+		email        string
+		setEmail     bool
 		expectedName string
 	}{
 		{
-			name:         "User with email",
-			user:         &oauth.User{Email: "abc@example.com"},
+			name:         "Email set in context",
+			email:        "abc@example.com",
+			setEmail:     true,
 			expectedName: "abc@example.com",
 		},
 		{
-			name:         "User with username",
-			user:         &oauth.User{Username: "abc@example.com"},
-			expectedName: "abc@example.com",
-		},
-		{
-			name:         "User with username and email",
-			user:         &oauth.User{Username: "abc@example.com", Email: "def@example.com"},
-			expectedName: "abc@example.com",
-		},
-		{
-			name:         "User with subject",
-			user:         &oauth.User{Subject: "abc@example.com"},
-			expectedName: "abc@example.com",
-		},
-		{
-			name:         "Empty User - returns mcp-trino-user (default attribution)",
-			user:         &oauth.User{},
+			name:         "Empty email - returns mcp-trino-user (default attribution)",
+			email:        "",
+			setEmail:     true,
 			expectedName: defaultAttributionUser,
 		},
 		{
-			name:         "Nil User - returns mcp-trino-user (default attribution)",
-			user:         nil,
+			name:         "No email in context - returns mcp-trino-user (default attribution)",
+			setEmail:     false,
 			expectedName: defaultAttributionUser,
 		},
 	}
@@ -635,20 +622,13 @@ func TestGetOAuthUserAndUsername(t *testing.T) {
 		t.Run(tests[index].name, func(t *testing.T) {
 			ctx := context.Background()
 			tt := tests[index]
-			if tt.user != nil {
-				ctx = oauth.WithUser(ctx, tt.user)
+			if tt.setEmail {
+				ctx = WithUserEmail(ctx, tt.email)
 			}
-			returnedUser, username := getOAuthUserAndUsername(ctx)
+			username := attributionUsername(ctx)
 			if username != tt.expectedName {
-				t.Errorf("getOAuthUserAndUsername(%v) username = %s, want %s", tt.user, username, tt.expectedName)
-			}
-			if tt.user == nil && returnedUser != nil {
-				t.Errorf("getOAuthUserAndUsername(%v) user = %v, want nil", tt.user, returnedUser)
-			}
-			if tt.user != nil && returnedUser == nil {
-				t.Errorf("getOAuthUserAndUsername(%v) user = nil, want non-nil", tt.user)
+				t.Errorf("attributionUsername() = %s, want %s", username, tt.expectedName)
 			}
 		})
 	}
-
 }

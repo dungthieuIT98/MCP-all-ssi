@@ -16,7 +16,6 @@ The tool automatically detects which mode to use based on arguments and environm
 - **Key Dependencies:**
   - `github.com/mark3labs/mcp-go` v0.41.1 (MCP protocol)
   - `github.com/trinodb/trino-go-client` v0.328.0 (Trino client)
-  - `github.com/tuannvm/oauth-mcp-proxy` v0.0.2 (OAuth 2.1 authentication)
 - **Build Tools:** GoReleaser, Docker, GitHub Actions, golangci-lint
 
 ## Development Commands
@@ -37,8 +36,6 @@ make run-docker          # Build and run Docker image locally
 
 # Release and packaging
 make release-snapshot    # Create snapshot release with GoReleaser
-make build-dxt          # Build platform-specific binaries for DXT
-make pack-dxt           # Package DXT extension
 
 # Testing individual components
 go test ./internal/config    # Test configuration package
@@ -86,14 +83,12 @@ go test ./cmd                # Test mode detection and integration
    - Consistent logging for debugging
    - Tool result standardization
 
-### OAuth Authentication Architecture
+### User Identity Architecture
 
-OAuth 2.1 authentication is provided by the external **[oauth-mcp-proxy](https://github.com/tuannvm/oauth-mcp-proxy)** library:
-- **Integration Point**: `internal/mcp/server.go` - OAuth middleware registration
-- **Configuration**: `internal/config/config.go` - OAuth config gathering (validation delegated to library)
-- **Modes**: Native (client-driven) and Proxy (server-driven) OAuth flows
-- **Providers**: HMAC, Okta, Google, Azure AD
-- **Documentation**: See [docs/oauth.md](docs/oauth.md) and [oauth-mcp-proxy docs](https://github.com/tuannvm/oauth-mcp-proxy#readme)
+mcp-trino does not authenticate callers itself. It trusts the `X-User-Email` header as-is, which must be set (and stripped from client input) by a trusted upstream gateway that has already authenticated the caller.
+- **Integration Point**: `internal/mcp/server.go` - `userEmailContextFunc` reads the header via `WithHTTPContextFunc`
+- **Configuration**: `internal/config/config.go` - `EnableImpersonation` / `TRINO_ENABLE_IMPERSONATION`
+- **Documentation**: See [docs/impersonation.md](docs/impersonation.md)
 
 ### Transport Support
 
@@ -130,13 +125,8 @@ All tools return JSON-formatted responses and handle parameter validation:
 **MCP Server:**
 - `MCP_TRANSPORT` (stdio/http), `MCP_PORT` (default: 8080), `MCP_HOST`
 
-**OAuth (optional, via oauth-mcp-proxy):**
-- `OAUTH_ENABLED` (default: false) - Single source of truth for OAuth activation
-- `OAUTH_MODE` (native/proxy, default: native)
-- `OAUTH_PROVIDER` (hmac/okta/google/azure, default: hmac)
-- `JWT_SECRET` - Required for HMAC provider
-- `OIDC_ISSUER`, `OIDC_AUDIENCE`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET` - For OIDC providers
-- `OAUTH_ALLOWED_REDIRECT_URIS` - Comma-separated redirect URIs
+**Impersonation (optional, requires a trusted upstream gateway):**
+- `TRINO_ENABLE_IMPERSONATION` (default: false) - impersonate the caller identified by the `X-User-Email` header
 
 Key defaults and behaviors:
 - HTTPS scheme forces SSL=true regardless of TRINO_SSL setting

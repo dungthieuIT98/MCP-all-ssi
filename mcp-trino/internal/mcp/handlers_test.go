@@ -10,7 +10,7 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 	mcpserver "github.com/mark3labs/mcp-go/server"
-	"github.com/tuannvm/mcp-trino/internal/config"
+	"gitlab.ssi.com.vn/dto-data/mcp_server_trino/internal/config"
 )
 
 // expectedTools lists all tool names that RegisterTrinoTools must register.

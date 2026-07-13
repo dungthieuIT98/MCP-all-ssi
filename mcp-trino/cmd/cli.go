@@ -10,9 +10,9 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/tuannvm/mcp-trino/internal/cli"
-	"github.com/tuannvm/mcp-trino/internal/config"
-	"github.com/tuannvm/mcp-trino/internal/trino"
+	"gitlab.ssi.com.vn/dto-data/mcp_server_trino/internal/cli"
+	"gitlab.ssi.com.vn/dto-data/mcp_server_trino/internal/config"
+	"gitlab.ssi.com.vn/dto-data/mcp_server_trino/internal/trino"
 )
 
 // Exit codes following Unix conventions

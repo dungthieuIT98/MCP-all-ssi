@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tuannvm/mcp-trino/internal/trino"
+	"gitlab.ssi.com.vn/dto-data/mcp_server_trino/internal/trino"
 )
 
 func TestNewREPL(t *testing.T) {

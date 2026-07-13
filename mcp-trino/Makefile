@@ -1,4 +1,4 @@
-.PHONY: build build-dxt pack-dxt test clean run-dev release-snapshot run-docker run docker-compose-up docker-compose-down lint docker-test cli install-cli
+.PHONY: build test clean run-dev release-snapshot run-docker run docker-compose-up docker-compose-down lint docker-test cli install-cli
 
 # Variables
 BINARY_NAME=mcp-trino
@@ -20,23 +20,6 @@ install-cli: build
 	@cp $(BUILD_DIR)/$(BINARY_NAME) $$(go env GOPATH)/bin/
 	@echo "Installed successfully. You can now run: $(BINARY_NAME) --version"
 
-# Build all platform-specific binaries for DXT packaging
-build-dxt:
-	mkdir -p server
-	@echo "Building platform-specific binaries for DXT..."
-	GOOS=darwin GOARCH=arm64 go build -ldflags "-X main.Version=$(VERSION)" -o server/$(BINARY_NAME)-darwin-arm64 ./cmd
-	GOOS=darwin GOARCH=amd64 go build -ldflags "-X main.Version=$(VERSION)" -o server/$(BINARY_NAME)-darwin-amd64 ./cmd
-	GOOS=linux GOARCH=amd64 go build -ldflags "-X main.Version=$(VERSION)" -o server/$(BINARY_NAME)-linux-amd64 ./cmd
-	GOOS=windows GOARCH=amd64 go build -ldflags "-X main.Version=$(VERSION)" -o server/$(BINARY_NAME)-windows-amd64.exe ./cmd
-	chmod +x server/$(BINARY_NAME)-*
-	@echo "All platform binaries built in server/ directory"
-
-# Package DXT extension
-pack-dxt: build-dxt
-	@echo "Packaging DXT extension..."
-	dxt pack
-	@echo "DXT package created: $(BINARY_NAME).dxt"
-
 # Run tests
 test:
 	go test ./...
@@ -44,8 +27,6 @@ test:
 # Clean build artifacts
 clean:
 	rm -rf $(BUILD_DIR)
-	rm -rf server
-	rm -f $(BINARY_NAME).dxt $(BINARY_NAME)-*.dxt
 
 # Run the application in development mode
 run-dev:

@@ -11,9 +11,8 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
-	"github.com/tuannvm/mcp-trino/internal/config"
-	oauth "github.com/tuannvm/oauth-mcp-proxy"
-	"github.com/tuannvm/mcp-trino/internal/trino"
+	"gitlab.ssi.com.vn/dto-data/mcp_server_trino/internal/config"
+	"gitlab.ssi.com.vn/dto-data/mcp_server_trino/internal/trino"
 )
 
 // TrinoHandlers contains all handlers for Trino-related tools
@@ -89,38 +88,18 @@ func CleanupTempResults() {
 	}
 }
 
-// prepareImpersonationContext adds impersonated user to context
+// prepareImpersonationContext adds the impersonated user to context, using the
+// caller's email (from the X-User-Email header, set by server.go's HTTP context
+// func) as the Trino principal.
 func (h *TrinoHandlers) prepareImpersonationContext(ctx context.Context) context.Context {
-	user, ok := oauth.GetUserFromContext(ctx)
-	if !ok || user == nil {
-		log.Printf("[impersonate] no OAuth user found in context — skipping impersonation")
+	email, ok := trino.GetUserEmail(ctx)
+	if !ok || email == "" {
+		log.Printf("[impersonate] no X-User-Email found in context — skipping impersonation")
 		return ctx
 	}
 
-	log.Printf("[impersonate] OAuth user from context: subject=%q email=%q username=%q",
-		user.Subject, user.Email, user.Username)
-
-	var principal string
-	switch h.Config.ImpersonationField {
-	case "email":
-		principal = user.Email
-	case "subject":
-		principal = user.Subject
-	case "username":
-		fallthrough
-	default:
-		principal = user.Username
-	}
-
-	log.Printf("[impersonate] ImpersonationField=%q → principal=%q", h.Config.ImpersonationField, principal)
-
-	if principal != "" {
-		log.Printf("[impersonate] X-Trino-User will be set to %q on Trino requests", principal)
-		return trino.WithImpersonatedUser(ctx, principal)
-	}
-
-	log.Printf("[impersonate] WARNING: field %q is empty — impersonation skipped, Trino will use default user", h.Config.ImpersonationField)
-	return ctx
+	log.Printf("[impersonate] X-Trino-User will be set to %q on Trino requests", email)
+	return trino.WithImpersonatedUser(ctx, email)
 }
 
 // ExecuteQuery handles query execution
@@ -453,8 +432,6 @@ func (h *TrinoHandlers) ExplainQuery(ctx context.Context, request mcp.CallToolRe
 }
 
 // RegisterTrinoTools registers all Trino-related tools with the MCP server.
-// OAuth middleware is applied server-wide via WithToolHandlerMiddleware(),
-// so no per-tool middleware application needed.
 func RegisterTrinoTools(m *server.MCPServer, h *TrinoHandlers) {
 
 	m.AddTool(mcp.NewTool("execute_query",

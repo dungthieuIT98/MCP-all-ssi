@@ -7,9 +7,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/tuannvm/mcp-trino/internal/config"
-	"github.com/tuannvm/mcp-trino/internal/mcp"
-	"github.com/tuannvm/mcp-trino/internal/trino"
+	"gitlab.ssi.com.vn/dto-data/mcp_server_trino/internal/config"
+	"gitlab.ssi.com.vn/dto-data/mcp_server_trino/internal/mcp"
+	"gitlab.ssi.com.vn/dto-data/mcp_server_trino/internal/trino"
 )
 
 // These variables will be set during the build via ldflags

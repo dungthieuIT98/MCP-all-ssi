@@ -2,14 +2,14 @@
 
 A high-performance Model Context Protocol (MCP) server for Trino implemented in Go. This project enables AI assistants to seamlessly interact with Trino's distributed SQL query engine through standardized MCP tools.
 
-[![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/tuannvm/mcp-trino/build.yml?branch=main&label=CI%2FCD&logo=github)](https://github.com/tuannvm/mcp-trino/actions/workflows/build.yml)
-[![Go Version](https://img.shields.io/github/go-mod/go-version/tuannvm/mcp-trino?logo=go)](https://github.com/tuannvm/mcp-trino/blob/main/go.mod)
-[![Trivy Scan](https://img.shields.io/github/actions/workflow/status/tuannvm/mcp-trino/build.yml?branch=main&label=Trivy%20Security%20Scan&logo=aquasec)](https://github.com/tuannvm/mcp-trino/actions/workflows/build.yml)
+[![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/tbcl/mcp-trino/build.yml?branch=main&label=CI%2FCD&logo=github)](https://gitlab.ssi.com.vn/dto-data/mcp_server_trino/actions/workflows/build.yml)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/tbcl/mcp-trino?logo=go)](https://gitlab.ssi.com.vn/dto-data/mcp_server_trino/blob/main/go.mod)
+[![Trivy Scan](https://img.shields.io/github/actions/workflow/status/tbcl/mcp-trino/build.yml?branch=main&label=Trivy%20Security%20Scan&logo=aquasec)](https://gitlab.ssi.com.vn/dto-data/mcp_server_trino/actions/workflows/build.yml)
 [![SLSA 3](https://slsa.dev/images/gh-badge-level3.svg)](https://slsa.dev)
-[![Go Report Card](https://goreportcard.com/badge/github.com/tuannvm/mcp-trino)](https://goreportcard.com/report/github.com/tuannvm/mcp-trino)
-[![Go Reference](https://pkg.go.dev/badge/github.com/tuannvm/mcp-trino.svg)](https://pkg.go.dev/github.com/tuannvm/mcp-trino)
-[![Docker Image](https://img.shields.io/github/v/release/tuannvm/mcp-trino?sort=semver&label=GHCR&logo=docker)](https://github.com/tuannvm/mcp-trino/pkgs/container/mcp-trino)
-[![GitHub Release](https://img.shields.io/github/v/release/tuannvm/mcp-trino?sort=semver)](https://github.com/tuannvm/mcp-trino/releases/latest)
+[![Go Report Card](https://goreportcard.com/badge/gitlab.ssi.com.vn/dto-data/mcp_server_trino)](https://goreportcard.com/report/gitlab.ssi.com.vn/dto-data/mcp_server_trino)
+[![Go Reference](https://pkg.go.dev/badge/gitlab.ssi.com.vn/dto-data/mcp_server_trino.svg)](https://pkg.go.dev/gitlab.ssi.com.vn/dto-data/mcp_server_trino)
+[![Docker Image](https://img.shields.io/github/v/release/tbcl/mcp-trino?sort=semver&label=GHCR&logo=docker)](https://gitlab.ssi.com.vn/dto-data/mcp_server_trino/pkgs/container/mcp-trino)
+[![GitHub Release](https://img.shields.io/github/v/release/tbcl/mcp-trino?sort=semver)](https://gitlab.ssi.com.vn/dto-data/mcp_server_trino/releases/latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 [![Trust Score](https://archestra.ai/mcp-catalog/api/badge/quality/tuannvm/mcp-trino)](https://archestra.ai/mcp-catalog/tuannvm__mcp-trino)
@@ -32,15 +32,13 @@ graph TB
         CW[ChatWise]
     end
     
-    subgraph "Authentication (Optional)"
-        OP[OAuth Provider<br/>Okta/Google/Azure AD]
-        JWT[JWT Tokens]
+    subgraph "Trusted Upstream Gateway (Optional)"
+        GW[Gateway<br/>authenticates caller,<br/>sets X-User-Email]
     end
     
     subgraph "MCP Server (mcp-trino)"
         HTTP[HTTP Transport<br/>/mcp endpoint]
         STDIO[STDIO Transport]
-        AUTH[OAuth Middleware]
         TOOLS[MCP Tools<br/>• execute_query<br/>• list_catalogs<br/>• list_schemas<br/>• list_tables<br/>• get_table_schema<br/>• explain_query]
     end
     
@@ -50,17 +48,14 @@ graph TB
     end
     
     %% Connections
-    CC -.->|OAuth Flow| OP
-    OP -.->|JWT Token| JWT
-    
-    CC -->|HTTP + JWT| HTTP
+    CC -->|HTTP| GW
+    CR -->|HTTP| GW
+    CW -->|HTTP| GW
+    GW -->|X-User-Email| HTTP
     CD -->|STDIO| STDIO
-    CR -->|HTTP + JWT| HTTP
     WS -->|STDIO| STDIO
-    CW -->|HTTP + JWT| HTTP
     
-    HTTP --> AUTH
-    AUTH -->|Validated| TOOLS
+    HTTP --> TOOLS
     STDIO --> TOOLS
     
     TOOLS -->|SQL Queries| TRINO
@@ -73,15 +68,15 @@ graph TB
     classDef data fill:#fff3e0
     
     class CC,CD,CR,WS,CW client
-    class OP,JWT auth
-    class HTTP,STDIO,AUTH,TOOLS server
+    class GW auth
+    class HTTP,STDIO,TOOLS server
     class TRINO,CATALOGS data
 ```
 
 **Key Components:**
 
 - **AI Clients**: Various MCP-compatible applications
-- **Authentication**: Optional OAuth 2.0 with OIDC providers
+- **Authentication**: mcp-trino does not authenticate callers itself — an optional trusted upstream gateway authenticates the caller and sets the `X-User-Email` header
 - **MCP Server**: Go-based server with dual transport support
 - **CLI Mode**: Interactive SQL shell for direct Trino access (psql-like)
 - **Data Layer**: Trino cluster connecting to multiple data sources
@@ -96,18 +91,12 @@ graph TB
 - ✅ Catalog, schema, and table discovery
 - ✅ Docker container support
 - ✅ Supports both STDIO and HTTP transports
-- ✅ OAuth 2.1 authentication via [oauth-mcp-proxy](https://github.com/tuannvm/oauth-mcp-proxy) library
-  - **4 Providers**: HMAC, Okta, Google, Azure AD
-  - **Native mode**: Client handles OAuth directly (zero server-side secrets)
-  - **Proxy mode**: Server proxies OAuth flow for simple clients
-  - **Production-ready**: Token caching, PKCE, defense-in-depth security
-  - **Reusable**: OAuth library available for any Go MCP server
-- ✅ StreamableHTTP support with JWT authentication (upgraded from SSE)
+- ✅ StreamableHTTP support (upgraded from SSE)
 - ✅ Backward compatibility with SSE endpoints
 - ✅ Compatible with Cursor, Claude Desktop, Windsurf, ChatWise, and any MCP-compatible clients.
-- ✅ User Identity Tracking:
-  - **Query Attribution** (automatic): Tags queries with OAuth user via `X-Trino-Client-Tags/Info` headers
-  - **User Impersonation** (opt-in): Execute queries as OAuth user via `X-Trino-User` header
+- ✅ User Identity Tracking, driven by the `X-User-Email` header set by a trusted upstream gateway:
+  - **Query Attribution** (automatic): Tags queries with the caller's email via `X-Trino-Client-Tags/Info` headers
+  - **User Impersonation** (opt-in): Execute queries as the caller via `X-Trino-User` header
 
 ## Installation & Quick Start
 
@@ -116,9 +105,6 @@ graph TB
 ```bash
 # Homebrew
 brew install tuannvm/mcp/mcp-trino
-
-# Or one-liner (macOS/Linux)
-curl -fsSL https://raw.githubusercontent.com/tuannvm/mcp-trino/main/install.sh | bash
 ```
 
 **Run (Local Development):**
@@ -128,7 +114,7 @@ export TRINO_HOST=localhost TRINO_USER=trino
 mcp-trino
 ```
 
-For production deployment with OAuth, see [Deployment Guide](docs/deployment.md) and [OAuth Architecture](docs/oauth.md).
+For production deployment behind a trusted authenticating gateway, see [Deployment Guide](docs/deployment.md) and [User Identity Guide](docs/impersonation.md).
 
 ## CLI Mode
 
@@ -314,7 +300,7 @@ For client integration and tool documentation, see [Integration Guide](docs/inte
 
 ## Configuration
 
-**Key Variables:** `TRINO_HOST`, `TRINO_USER`, `TRINO_SCHEME`, `MCP_TRANSPORT`, `OAUTH_PROVIDER`
+**Key Variables:** `TRINO_HOST`, `TRINO_USER`, `TRINO_SCHEME`, `MCP_TRANSPORT`, `TRINO_ENABLE_IMPERSONATION`
 
 **Secret Management:** Inject secrets through the process environment — `mcp-trino` reads them directly. See [docs/secrets.md](docs/secrets.md) for 1Password, Vault, and Kubernetes recipes.
 
@@ -328,20 +314,6 @@ TRINO_PASSWORD=$(vault kv get -field=password secret/mcp-trino) mcp-trino
 # Kubernetes: use standard Secret → envFrom in the Helm chart values
 ```
 
-**OAuth Configuration:**
-
-```bash
-# Native mode (most secure - zero server-side secrets)
-export OAUTH_ENABLED=true OAUTH_MODE=native OAUTH_PROVIDER=okta
-export OIDC_ISSUER=https://company.okta.com OIDC_AUDIENCE=https://mcp-server.com
-
-# Proxy mode (centralized credential management)
-export OAUTH_MODE=proxy OIDC_CLIENT_ID=app-id OIDC_CLIENT_SECRET=secret
-export OAUTH_REDIRECT_URI=https://mcp-server.com/oauth/callback  # Fixed mode (localhost-only)
-export OAUTH_REDIRECT_URI=https://app1.com/cb,https://app2.com/cb  # Allowlist mode
-export JWT_SECRET=$(openssl rand -hex 32)  # Required for multi-pod deployments
-```
-
 **Performance Optimization:**
 
 ```bash
@@ -351,31 +323,17 @@ export TRINO_ALLOWED_SCHEMAS="hive.analytics,hive.marts,hive.reporting"
 
 **User Identity Tracking:**
 
+mcp-trino does not authenticate callers itself. Put a trusted upstream gateway in front of it that authenticates the caller and sets the `X-User-Email` header (stripping any client-supplied value first).
+
 ```bash
-# Query Attribution is AUTOMATIC when OAuth is enabled
+# Query Attribution is AUTOMATIC whenever X-User-Email is present
 # Queries are tagged with X-Trino-Client-Tags and X-Trino-Client-Info headers
 
 # For full impersonation (Trino enforces user permissions):
 export TRINO_ENABLE_IMPERSONATION=true
-export TRINO_IMPERSONATION_FIELD=email  # Options: username, email, subject
 ```
 
-For complete configuration, see [Deployment Guide](docs/deployment.md), [OAuth Guide](docs/oauth.md), [Allowlists Guide](docs/allowlists.md), and [User Identity Guide](docs/impersonation.md).
-
-## OAuth Implementation
-
-mcp-trino uses [oauth-mcp-proxy](https://github.com/tuannvm/oauth-mcp-proxy) - a standalone OAuth 2.1 library for Go MCP servers.
-
-**Why a separate library?**
-- ✅ Reusable across any Go MCP server
-- ✅ Independent testing and versioning
-- ✅ Dedicated documentation and examples
-- ✅ Community-maintained OAuth implementation
-
-**For OAuth details:**
-- [oauth-mcp-proxy Documentation](https://github.com/tuannvm/oauth-mcp-proxy#readme) - Complete OAuth guide
-- [Provider Setup Guides](https://github.com/tuannvm/oauth-mcp-proxy/tree/main/docs/providers) - Okta, Google, Azure AD
-- [Security Best Practices](https://github.com/tuannvm/oauth-mcp-proxy/blob/main/docs/SECURITY.md) - Production security
+For complete configuration, see [Deployment Guide](docs/deployment.md), [Allowlists Guide](docs/allowlists.md), and [User Identity Guide](docs/impersonation.md).
 
 ## Contributing
 
@@ -384,10 +342,6 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
-
-## Related Projects
-
-- **[oauth-mcp-proxy](https://github.com/tuannvm/oauth-mcp-proxy)** - OAuth 2.1 authentication library used by mcp-trino (reusable for any Go MCP server)
 
 ## CI/CD and Releases
 

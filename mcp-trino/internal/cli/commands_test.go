@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tuannvm/mcp-trino/internal/trino"
+	"gitlab.ssi.com.vn/dto-data/mcp_server_trino/internal/trino"
 )
 
 // mockTrinoClient implements TrinoClient for testing

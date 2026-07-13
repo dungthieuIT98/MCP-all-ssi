@@ -2,64 +2,61 @@ package mcp
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
 	mcpserver "github.com/mark3labs/mcp-go/server"
-	oauth "github.com/tuannvm/oauth-mcp-proxy"
-	"github.com/tuannvm/mcp-trino/internal/config"
-	"github.com/tuannvm/mcp-trino/internal/trino"
+	"gitlab.ssi.com.vn/dto-data/mcp_server_trino/internal/config"
+	"gitlab.ssi.com.vn/dto-data/mcp_server_trino/internal/trino"
 )
+
+// userEmailHeader is the HTTP header a trusted upstream gateway (e.g. Kong) sets
+// after authenticating the caller. mcp-trino trusts it as-is and does not
+// verify it — the gateway MUST strip any client-supplied value for this header.
+const userEmailHeader = "X-User-Email"
 
 // Server represents the MCP server with all components
 type Server struct {
-	mcpServer   *mcpserver.MCPServer
-	config      *config.TrinoConfig
-	version     string
-	oauthServer *oauth.Server // oauth-mcp-proxy Server (nil if OAuth disabled)
+	mcpServer *mcpserver.MCPServer
+	config    *config.TrinoConfig
+	version   string
 }
 
 // NewServer creates a new MCP server instance with all components
 func NewServer(trinoClient *trino.Client, trinoConfig *config.TrinoConfig, version string) *Server {
-	mcpServer, oauthServer := createMCPServer(trinoClient, trinoConfig, version)
+	mcpServer := createMCPServer(trinoClient, trinoConfig, version)
 
 	return &Server{
-		mcpServer:   mcpServer,
-		config:      trinoConfig,
-		version:     version,
-		oauthServer: oauthServer,
+		mcpServer: mcpServer,
+		config:    trinoConfig,
+		version:   version,
 	}
 }
 
-func createMCPServer(trinoClient *trino.Client, trinoConfig *config.TrinoConfig, version string) (*mcpserver.MCPServer, *oauth.Server) {
+func createMCPServer(trinoClient *trino.Client, trinoConfig *config.TrinoConfig, version string) *mcpserver.MCPServer {
 	options := []mcpserver.ServerOption{mcpserver.WithToolCapabilities(true)}
-
-	var oauthServer *oauth.Server
-	if trinoConfig.OAuthEnabled {
-		oauthCfg := trinoConfigToOAuthConfig(trinoConfig)
-		var err error
-		oauthServer, err = oauth.NewServer(oauthCfg)
-		if err != nil {
-			log.Printf("ERROR: Failed to create OAuth server: %v", err)
-		} else {
-			options = append(options, mcpserver.WithToolHandlerMiddleware(oauthServer.Middleware()))
-			log.Printf("INFO: OAuth enabled with provider: %s, mode: %s", trinoConfig.OAuthProvider, trinoConfig.OAuthMode)
-		}
-	}
 
 	mcpServer := mcpserver.NewMCPServer("Trino MCP Server", version, options...)
 
 	trinoHandlers := NewTrinoHandlers(trinoClient, trinoConfig)
 	RegisterTrinoTools(mcpServer, trinoHandlers)
 
-	return mcpServer, oauthServer
+	return mcpServer
+}
+
+// userEmailContextFunc extracts the X-User-Email header set by the trusted
+// upstream gateway and stores it in context for impersonation.
+func userEmailContextFunc(ctx context.Context, r *http.Request) context.Context {
+	email := r.Header.Get(userEmailHeader)
+	if email == "" {
+		return ctx
+	}
+	return trino.WithUserEmail(ctx, email)
 }
 
 // ServeStdio starts the MCP server with STDIO transport
@@ -73,29 +70,15 @@ func (s *Server) ServeHTTP(port string) error {
 
 	log.Println("Setting up StreamableHTTP server...")
 
-	var streamableServer *mcpserver.StreamableHTTPServer
-	if s.config.OAuthEnabled {
-		streamableServer = mcpserver.NewStreamableHTTPServer(
-			s.mcpServer,
-			mcpserver.WithEndpointPath("/mcp"),
-			mcpserver.WithHTTPContextFunc(oauth.CreateHTTPContextFunc()),
-			mcpserver.WithStateLess(false),
-		)
-	} else {
-		streamableServer = mcpserver.NewStreamableHTTPServer(
-			s.mcpServer,
-			mcpserver.WithEndpointPath("/mcp"),
-			mcpserver.WithStateLess(false),
-		)
-	}
+	streamableServer := mcpserver.NewStreamableHTTPServer(
+		s.mcpServer,
+		mcpserver.WithEndpointPath("/mcp"),
+		mcpserver.WithHTTPContextFunc(userEmailContextFunc),
+		mcpserver.WithStateLess(false),
+	)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/status", s.handleStatus)
-
-	if s.config.OAuthEnabled && s.oauthServer != nil {
-		s.oauthServer.RegisterHandlers(mux)
-		log.Printf("INFO: OAuth enabled - mode: %s, provider: %s", s.config.OAuthMode, s.config.OAuthProvider)
-	}
 
 	mcpHandler := s.createMCPHandler(streamableServer)
 	mux.HandleFunc("/mcp", mcpHandler)
@@ -115,34 +98,20 @@ func (s *Server) ServeHTTP(port string) error {
 		scheme := s.getScheme()
 		mcpURL := getEnv("MCP_URL", fmt.Sprintf("%s://%s:%s", scheme, mcpHost, mcpPort))
 
-		if certFile != "" && keyFile != "" {
-			oauthStatus := s.getOAuthStatus()
+		impersonationStatus := s.getImpersonationStatus()
 
-			log.Printf("Starting HTTPS server on %s%s", addr, oauthStatus)
+		if certFile != "" && keyFile != "" {
+			log.Printf("Starting HTTPS server on %s%s", addr, impersonationStatus)
 			log.Printf("  - Modern endpoint: %s/mcp", mcpURL)
 			log.Printf("  - Legacy endpoint: %s/sse (backward compatibility)", mcpURL)
-			log.Printf("  - OAuth metadata: %s/.well-known/oauth-authorization-server", mcpURL)
-			log.Printf("  - OAuth metadata (legacy): %s/.well-known/oauth-metadata", mcpURL)
-			if s.config.OAuthEnabled {
-				log.Printf("  - OAuth callback: %s/oauth/callback", mcpURL)
-				log.Printf("  - OAuth callback (Claude Code): %s/callback (redirects to /oauth/callback)", mcpURL)
-			}
 
 			if err := httpServer.ListenAndServeTLS(certFile, keyFile); err != nil && err != http.ErrServerClosed {
 				log.Fatalf("HTTPS server error: %v", err)
 			}
 		} else {
-			oauthStatus := s.getOAuthStatusWithWarning()
-
-			log.Printf("Starting HTTP server on %s%s", addr, oauthStatus)
+			log.Printf("Starting HTTP server on %s%s", addr, impersonationStatus)
 			log.Printf("  - Modern endpoint: %s/mcp", mcpURL)
 			log.Printf("  - Legacy endpoint: %s/sse (backward compatibility)", mcpURL)
-			log.Printf("  - OAuth metadata: %s/.well-known/oauth-authorization-server", mcpURL)
-			log.Printf("  - OAuth metadata (legacy): %s/.well-known/oauth-metadata", mcpURL)
-			if s.config.OAuthEnabled {
-				log.Printf("  - OAuth callback: %s/oauth/callback", mcpURL)
-				log.Printf("  - OAuth callback (Claude Code): %s/callback (redirects to /oauth/callback)", mcpURL)
-			}
 
 			if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 				log.Fatalf("HTTP server error: %v", err)
@@ -180,36 +149,6 @@ func (s *Server) createMCPHandler(streamableServer *mcpserver.StreamableHTTPServ
 
 		log.Printf("MCP %s %s from %s", r.Method, r.URL.Path, r.RemoteAddr)
 
-		if s.config.OAuthEnabled {
-			authHeader := r.Header.Get("Authorization")
-			if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
-				log.Printf("OAuth: No bearer token provided, returning 401 with discovery info")
-
-				mcpHost := getEnv("MCP_HOST", "localhost")
-				mcpPort := getEnv("MCP_PORT", "8080")
-				scheme := s.getScheme()
-				mcpURL := getEnv("MCP_URL", fmt.Sprintf("%s://%s:%s", scheme, mcpHost, mcpPort))
-
-				w.Header().Add("WWW-Authenticate", `Bearer realm="OAuth", error="invalid_token", error_description="Missing or invalid access token"`)
-				w.Header().Add("WWW-Authenticate", fmt.Sprintf(`resource_metadata="%s/.well-known/oauth-protected-resource"`, mcpURL))
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusUnauthorized)
-
-				errorResponse := map[string]string{
-					"error":             "invalid_token",
-					"error_description": "Missing or invalid access token",
-				}
-				if err := json.NewEncoder(w).Encode(errorResponse); err != nil {
-					log.Printf("Error encoding OAuth error response: %v", err)
-				}
-				return
-			}
-
-			contextFunc := oauth.CreateHTTPContextFunc()
-			ctx := contextFunc(r.Context(), r)
-			r = r.WithContext(ctx)
-		}
-
 		streamableServer.ServeHTTP(w, r)
 	}
 }
@@ -239,45 +178,12 @@ func (s *Server) getScheme() string {
 	return "http"
 }
 
-func (s *Server) getOAuthStatus() string {
-	if s.config.OAuthEnabled {
-		return " (OAuth enabled)"
+// getImpersonationStatus returns impersonation status for startup logging
+func (s *Server) getImpersonationStatus() string {
+	if s.config.EnableImpersonation {
+		return " (impersonation enabled via X-User-Email — must be set by a trusted upstream gateway)"
 	}
-	return " (OAuth disabled)"
-}
-
-// getOAuthStatusWithWarning returns OAuth status with warning for HTTP
-func (s *Server) getOAuthStatusWithWarning() string {
-	if s.config.OAuthEnabled {
-		return " (OAuth enabled - WARNING: HTTPS recommended for production)"
-	}
-	return " (OAuth disabled)"
-}
-
-
-func trinoConfigToOAuthConfig(cfg *config.TrinoConfig) *oauth.Config {
-	serverURL := getEnv("MCP_URL", "")
-	if serverURL == "" {
-		mcpHost := getEnv("MCP_HOST", "localhost")
-		mcpPort := getEnv("MCP_PORT", "8080")
-		scheme := "http"
-		if getEnv("HTTPS_CERT_FILE", "") != "" && getEnv("HTTPS_KEY_FILE", "") != "" {
-			scheme = "https"
-		}
-		serverURL = fmt.Sprintf("%s://%s:%s", scheme, mcpHost, mcpPort)
-	}
-
-	return &oauth.Config{
-		Mode:         cfg.OAuthMode,
-		Provider:     cfg.OAuthProvider,
-		RedirectURIs: cfg.OAuthRedirectURIs,
-		Issuer:       cfg.OIDCIssuer,
-		Audience:     cfg.OIDCAudience,
-		ClientID:     cfg.OIDCClientID,
-		ClientSecret: cfg.OIDCClientSecret,
-		ServerURL:    serverURL,
-		JWTSecret:    []byte(cfg.JWTSecret),
-	}
+	return " (impersonation disabled)"
 }
 
 // getEnv gets environment variable with default value
