@@ -59,6 +59,28 @@ def get_caller_token(ctx: Context) -> Optional[str]:
     return None
 
 
+def get_caller_session(ctx: Context) -> Optional[str]:
+    """Extract the caller's Superset session cookie from the incoming request.
+
+    Superset issues a Flask ``session`` cookie after any successful web login —
+    including Azure AD / OAuth, which the JWT ``/security/login`` endpoint does
+    NOT support. Superset's own REST API accepts that session cookie (plus a
+    CSRF token for writes), so forwarding it lets an OAuth-authenticated user
+    drive the API with their real identity and RLS, no JWT minting required.
+
+    The session value is read ONLY from the explicit ``X-Superset-Session``
+    header — the credential a client/proxy must send deliberately. Returns None
+    when the header is absent (e.g. stdio mode).
+    """
+    try:
+        request = ctx.request_context.request
+        if request is None:
+            return None
+        return request.headers.get("x-superset-session", "").strip() or None
+    except (AttributeError, LookupError):
+        return None
+
+
 async def create_superset_context() -> SupersetContext:
     """Create a new SupersetContext with a shared HTTP client."""
     client = httpx.AsyncClient(base_url=config.base_url, timeout=30.0, follow_redirects=True)

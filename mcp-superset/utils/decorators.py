@@ -20,9 +20,9 @@ def requires_auth(
 
     @wraps(func)
     async def wrapper(ctx: Context, *args, **kwargs) -> Dict[str, Any]:
-        from client import get_caller_token
+        from client import get_caller_session, get_caller_token
 
-        if not get_caller_token(ctx):
+        if not get_caller_token(ctx) and not get_caller_session(ctx):
             return {"error": "Not authenticated. Please authenticate first."}
 
         return await func(ctx, *args, **kwargs)
