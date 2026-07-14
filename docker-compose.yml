@@ -81,8 +81,83 @@ services:
       retries: 5
       start_period: 20s
 
+  # ── Superset ──────────────────────────────────────────────────────
+  superset:
+    build:
+      context: ./superset
+      dockerfile: Dockerfile
+    image: superset-azure:4.1.1
+    container_name: superset
+    hostname: superset
+    ports:
+      - "8088:8088"
+    environment:
+      # Signs session cookies / CSRF tokens and encrypts DB connection passwords
+      # in Superset metadata. Do NOT delete — Superset refuses to start without it.
+      # Regenerate with: openssl rand -base64 42
+      - SUPERSET_SECRET_KEY=Vet8cnOAdkVYOa+ObhE0Uw3oa8BiA/4k5MgBKxoiWPG3jz2BXfoEnB6v
+      - SUPERSET_LOAD_EXAMPLES=no
+      - FLASK_APP=superset
+      - ADMIN_USERNAME=admin
+      - ADMIN_PASSWORD=admin
+      - ADMIN_EMAIL=admin@superset.com
+      # Tells Superset to load our superset_config.py (Azure OAuth lives there).
+      - SUPERSET_CONFIG_PATH=/app/pythonpath/superset_config.py
+      # ── Azure AD (Microsoft Entra ID) OAuth — from Azure App registration ──
+      - AZURE_TENANT_ID=${AZURE_TENANT_ID}
+      - AZURE_CLIENT_ID=${AZURE_CLIENT_ID}
+      - AZURE_CLIENT_SECRET=${AZURE_CLIENT_SECRET}
+    volumes:
+      # Persists the default SQLite metadata DB (/app/superset_home). Swap for a
+      # dedicated Postgres in production — SQLite is single-writer and not for prod.
+      - superset-home:/app/superset_home
+      # Mount our Azure OAuth config onto Superset's pythonpath.
+      - ./superset/superset_config.py:/app/pythonpath/superset_config.py:ro
+    networks:
+      - trino-net
+    command:
+      - /bin/bash
+      - -c
+      - |
+        set -e
+        superset db upgrade
+        superset fab create-admin \
+          --username "$${ADMIN_USERNAME}" \
+          --firstname Admin --lastname User \
+          --email "$${ADMIN_EMAIL}" \
+          --password "$${ADMIN_PASSWORD}" || true
+        superset init
+        exec gunicorn --bind 0.0.0.0:8088 --workers 4 --timeout 120 \
+          "superset.app:create_app()"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8088/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+
+  # ── Superset MCP Server ───────────────────────────────────────────
+  superset-mcp:
+    build:
+      context: ./mcp-superset
+      dockerfile: Dockerfile
+    container_name: superset-mcp
+    ports:
+      # main.py serves the streamable-http app on 8000
+      - "6275:8000"
+    environment:
+      - SUPERSET_BASE_URL=http://superset:8088
+    depends_on:
+      superset:
+        condition: service_healthy
+    networks:
+      - trino-net
+    restart: unless-stopped
+
 volumes:
   mysql-data:
+  superset-home:
 
 networks:
   trino-net:
