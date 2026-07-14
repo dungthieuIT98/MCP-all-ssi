@@ -34,3 +34,12 @@ vendor/
 .claude/
 .claude/harness/
 trash/
+
+# Local Trino config, scripts, and container files
+trino-conf/
+run.bat
+Dockerfile
+docker-compose.yml
+
+# Secrets / keys
+*.pem

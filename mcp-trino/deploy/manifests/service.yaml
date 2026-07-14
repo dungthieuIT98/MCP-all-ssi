@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: mcp-trino
+  namespace: mcp-trino
+  labels:
+    app: mcp-trino
+spec:
+  type: ClusterIP
+  selector:
+    app: mcp-trino
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http

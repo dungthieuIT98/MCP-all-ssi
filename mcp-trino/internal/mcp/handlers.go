@@ -90,23 +90,28 @@ func CleanupTempResults() {
 
 // prepareImpersonationContext adds the impersonated user to context, using the
 // caller's email (from the X-User-Email header, set by server.go's HTTP context
-// func) as the Trino principal.
-func (h *TrinoHandlers) prepareImpersonationContext(ctx context.Context) context.Context {
+// func) as the Trino principal. Fails closed: when impersonation is enabled but
+// no caller identity is present on the request, it returns an error instead of
+// falling back to the service account.
+func (h *TrinoHandlers) prepareImpersonationContext(ctx context.Context) (context.Context, error) {
 	email, ok := trino.GetUserEmail(ctx)
 	if !ok || email == "" {
-		log.Printf("[impersonate] no X-User-Email found in context — skipping impersonation")
-		return ctx
+		return ctx, fmt.Errorf("impersonation is required (TRINO_ENABLE_IMPERSONATION=true) but no X-User-Email identity was found for this request")
 	}
 
 	log.Printf("[impersonate] X-Trino-User will be set to %q on Trino requests", email)
-	return trino.WithImpersonatedUser(ctx, email)
+	return trino.WithImpersonatedUser(ctx, email), nil
 }
 
 // ExecuteQuery handles query execution
 func (h *TrinoHandlers) ExecuteQuery(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-    if h.Config.EnableImpersonation {
-        ctx = h.prepareImpersonationContext(ctx)
-    }
+	if h.Config.EnableImpersonation {
+		var err error
+		ctx, err = h.prepareImpersonationContext(ctx)
+		if err != nil {
+			return mcp.NewToolResultErrorFromErr(err.Error(), err), nil
+		}
+	}
 
 	// Type assert Arguments to map[string]interface{}
 	args, ok := request.Params.Arguments.(map[string]interface{})
@@ -181,7 +186,11 @@ func (h *TrinoHandlers) ExecuteQuery(ctx context.Context, request mcp.CallToolRe
 // ListCatalogs handles catalog listing
 func (h *TrinoHandlers) ListCatalogs(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	if h.Config.EnableImpersonation {
-		ctx = h.prepareImpersonationContext(ctx)
+		var err error
+		ctx, err = h.prepareImpersonationContext(ctx)
+		if err != nil {
+			return mcp.NewToolResultErrorFromErr(err.Error(), err), nil
+		}
 	}
 
 	catalogs, err := h.TrinoClient.ListCatalogsWithContext(ctx)
@@ -204,7 +213,11 @@ func (h *TrinoHandlers) ListCatalogs(ctx context.Context, request mcp.CallToolRe
 // ListSchemas handles schema listing
 func (h *TrinoHandlers) ListSchemas(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	if h.Config.EnableImpersonation {
-		ctx = h.prepareImpersonationContext(ctx)
+		var err error
+		ctx, err = h.prepareImpersonationContext(ctx)
+		if err != nil {
+			return mcp.NewToolResultErrorFromErr(err.Error(), err), nil
+		}
 	}
 
 	// Type assert Arguments to map[string]interface{}
@@ -240,7 +253,11 @@ func (h *TrinoHandlers) ListSchemas(ctx context.Context, request mcp.CallToolReq
 // ListTables handles table listing
 func (h *TrinoHandlers) ListTables(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	if h.Config.EnableImpersonation {
-		ctx = h.prepareImpersonationContext(ctx)
+		var err error
+		ctx, err = h.prepareImpersonationContext(ctx)
+		if err != nil {
+			return mcp.NewToolResultErrorFromErr(err.Error(), err), nil
+		}
 	}
 
 	// Type assert Arguments to map[string]interface{}
@@ -299,7 +316,11 @@ func (h *TrinoHandlers) PingTrino(ctx context.Context, request mcp.CallToolReque
 // GetTableSchema handles table schema retrieval
 func (h *TrinoHandlers) GetTableSchema(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	if h.Config.EnableImpersonation {
-		ctx = h.prepareImpersonationContext(ctx)
+		var err error
+		ctx, err = h.prepareImpersonationContext(ctx)
+		if err != nil {
+			return mcp.NewToolResultErrorFromErr(err.Error(), err), nil
+		}
 	}
 
 	// Type assert Arguments to map[string]interface{}
@@ -348,7 +369,11 @@ func (h *TrinoHandlers) GetTableSchema(ctx context.Context, request mcp.CallTool
 // SampleTable handles combined schema + sample + stats retrieval
 func (h *TrinoHandlers) SampleTable(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	if h.Config.EnableImpersonation {
-		ctx = h.prepareImpersonationContext(ctx)
+		var err error
+		ctx, err = h.prepareImpersonationContext(ctx)
+		if err != nil {
+			return mcp.NewToolResultErrorFromErr(err.Error(), err), nil
+		}
 	}
 
 	args, ok := request.Params.Arguments.(map[string]interface{})
@@ -390,7 +415,11 @@ func (h *TrinoHandlers) SampleTable(ctx context.Context, request mcp.CallToolReq
 // ExplainQuery handles query plan analysis
 func (h *TrinoHandlers) ExplainQuery(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	if h.Config.EnableImpersonation {
-		ctx = h.prepareImpersonationContext(ctx)
+		var err error
+		ctx, err = h.prepareImpersonationContext(ctx)
+		if err != nil {
+			return mcp.NewToolResultErrorFromErr(err.Error(), err), nil
+		}
 	}
 
 	// Type assert Arguments to map[string]interface{}

@@ -329,8 +329,9 @@ mcp-trino does not authenticate callers itself. Put a trusted upstream gateway i
 # Query Attribution is AUTOMATIC whenever X-User-Email is present
 # Queries are tagged with X-Trino-Client-Tags and X-Trino-Client-Info headers
 
-# For full impersonation (Trino enforces user permissions):
-export TRINO_ENABLE_IMPERSONATION=true
+# Full impersonation (Trino enforces user permissions) is ON by default.
+# To disable and fall back to attribution-only (service account executes queries):
+export TRINO_ENABLE_IMPERSONATION=false
 ```
 
 For complete configuration, see [Deployment Guide](docs/deployment.md), [Allowlists Guide](docs/allowlists.md), and [User Identity Guide](docs/impersonation.md).
