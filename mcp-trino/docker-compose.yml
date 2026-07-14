@@ -1,0 +1,60 @@
+name: trino-mcp
+
+services:
+  mysql:
+    image: harbor.ssi.com.vn/dataplatform/mysql@sha256:805a6cdd4f299533f38ec91eb6de927963eac785b1984223bc4ccb744dacaec2
+    environment:
+      MYSQL_ROOT_PASSWORD: root123
+    ports:
+      - "3306:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot123"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  trino:
+    image: harbor.ssi.com.vn/dataplatform/trino@sha256:fe624403b55936deadd81e450497a16a98087c0dddc2aa7f2a14209a1c4a733e
+    depends_on:
+      mysql:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./trino-conf/config.properties:/etc/trino/config.properties
+      - ./trino-conf/jvm.config:/etc/trino/jvm.config
+      - ./trino-conf/access-control.properties:/etc/trino/access-control.properties
+      - ./trino-conf/rules.json:/etc/trino/rules.json
+      - ./trino-conf/catalog/mysql.properties:/etc/trino/catalog/mysql.properties
+      - ./trino-conf/catalog/memory.properties:/etc/trino/catalog/memory.properties
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/v1/info | grep -q '\"starting\":false'"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  trino-mcp:
+    build:
+      context: .
+      args:
+        BUILDPLATFORM: linux/amd64
+        TARGETPLATFORM: linux/amd64
+        TARGETOS: linux
+        TARGETARCH: amd64
+    depends_on:
+      trino:
+        condition: service_healthy
+    environment:
+      TRINO_HOST: trino
+      TRINO_PORT: "8080"
+      TRINO_USER: trino
+      TRINO_CATALOG: mysql
+      TRINO_SCHEMA: default
+      TRINO_SCHEME: http
+      TRINO_SSL: "false"
+      MCP_TRANSPORT: http
+      MCP_HOST: 0.0.0.0
+      MCP_PORT: "8080"
+    ports:
+      - "8082:8080"

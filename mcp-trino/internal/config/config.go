@@ -98,7 +98,7 @@ func NewTrinoConfigWithVersion(version string) (*TrinoConfig, error) {
 	allowedTables := parseAllowlist(resolveEnv("TRINO_ALLOWED_TABLES", ""))
 
 	// Parse impersonation configuration
-	enableImpersonation, _ := strconv.ParseBool(resolveEnv("TRINO_ENABLE_IMPERSONATION", "false"))
+	enableImpersonation, _ := strconv.ParseBool(resolveEnv("TRINO_ENABLE_IMPERSONATION", "true"))
 
 	// Parse Trino source configuration with default
 	trinoSource := resolveEnv("TRINO_SOURCE", fmt.Sprintf("mcp-trino/%s", version))
