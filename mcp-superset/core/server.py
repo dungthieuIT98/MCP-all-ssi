@@ -1,12 +1,12 @@
 """Shared FastMCP instance for Superset MCP server."""
 
 from contextlib import asynccontextmanager
-from typing import Any, AsyncIterator
+from typing import AsyncIterator
 
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 
-from client import (
+from core.context import (
     SupersetContext,
     close_superset_context,
     create_superset_context,

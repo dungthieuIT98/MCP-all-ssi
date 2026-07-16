@@ -2,7 +2,7 @@
 import logging
 
 import uvicorn
-from _mcp import mcp
+from core.server import mcp
 import tools  # noqa: F401 — registers all @mcp.tool() decorators
 
 logging.basicConfig(

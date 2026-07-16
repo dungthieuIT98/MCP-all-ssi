@@ -5,9 +5,9 @@ from typing import Any, Dict
 
 from mcp.server.fastmcp import Context
 
-from _mcp import mcp
+from core.server import mcp
 
-from utils.api import make_api_request
+from utils.http import make_api_request
 from utils.decorators import handle_api_errors, requires_auth
 from utils.constants import EXPLORE_FORM_DATA, EXPLORE_PERMALINK
 

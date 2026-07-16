@@ -12,17 +12,17 @@ def requires_auth(
 ) -> Callable[..., Awaitable[Dict[str, Any]]]:
     """Decorator to check authentication before executing a function.
 
-    Only accepts the caller's own forwarded token (per-user identity). The
-    admin service-account token on SupersetContext is never treated as
-    sufficient here, so a tool call can't pass this check without carrying
-    the real user's identity through to Superset.
+    Only accepts the caller's own forwarded Superset session cookie (per-user
+    identity). The server holds no service-account credential, so a tool call
+    can't pass this check without carrying the real user's identity through to
+    Superset.
     """
 
     @wraps(func)
     async def wrapper(ctx: Context, *args, **kwargs) -> Dict[str, Any]:
-        from client import get_caller_session, get_caller_token
+        from core.context import get_caller_session
 
-        if not get_caller_token(ctx) and not get_caller_session(ctx):
+        if not get_caller_session(ctx):
             return {"error": "Not authenticated. Please authenticate first."}
 
         return await func(ctx, *args, **kwargs)
