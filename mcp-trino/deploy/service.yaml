@@ -2,7 +2,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: mcp-trino
-  namespace: mcp-trino
+  namespace: dataplatform
   labels:
     app: mcp-trino
 spec:
@@ -11,5 +11,5 @@ spec:
     app: mcp-trino
   ports:
     - name: http
-      port: 8080
+      port: 3010
       targetPort: http

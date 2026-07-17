@@ -1,0 +1,24 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: mcp-trino
+  namespace: dataplatform
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - "data-mcp-trino.ssi.com.vn"
+      secretName: ssi-tls
+  rules:
+    - host: "data-mcp-trino.ssi.com.vn"
+      http:
+        paths:
+          - path: /
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: mcp-trino
+                port:
+                  number: 3010
