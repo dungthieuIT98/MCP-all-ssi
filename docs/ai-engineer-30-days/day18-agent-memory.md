@@ -98,7 +98,7 @@ def run_session(conn, user_id: str, user_message: str):
     messages = [{"role": "user", "content": user_message}]
 
     response = client.messages.create(
-        model="claude-sonnet-4-5",
+        model="claude-sonnet-5",
         max_tokens=512,
         system=system_prompt,
         messages=messages,

@@ -64,7 +64,7 @@ def worker_billing(question: str) -> str:
     """Worker chuyên hoá đơn/thanh toán — chỉ thấy context của chính nó, KHÔNG thấy
     lịch sử của worker khác. Đây là điểm khác biệt thật so với 1 agent đơn."""
     response = client.messages.create(
-        model="claude-sonnet-4-5",
+        model="claude-sonnet-5",
         max_tokens=512,
         system="Bạn là chuyên gia hoá đơn/thanh toán. Chỉ trả lời trong phạm vi này.",
         messages=[{"role": "user", "content": question}],
@@ -75,7 +75,7 @@ def worker_billing(question: str) -> str:
 def worker_technical(question: str) -> str:
     """Worker chuyên kỹ thuật — cũng có context riêng, tách biệt hoàn toàn."""
     response = client.messages.create(
-        model="claude-sonnet-4-5",
+        model="claude-sonnet-5",
         max_tokens=512,
         system="Bạn là chuyên gia hỗ trợ kỹ thuật. Chỉ trả lời trong phạm vi này.",
         messages=[{"role": "user", "content": question}],
@@ -101,7 +101,7 @@ def supervisor(user_message: str) -> str:
     """Supervisor CHỈ quyết định route, không tự trả lời nội dung chuyên môn —
     đây là ranh giới rõ giữa 'điều phối' và 'chuyên môn hoá'."""
     response = client.messages.create(
-        model="claude-sonnet-4-5",
+        model="claude-sonnet-5",
         max_tokens=256,
         system="Bạn chỉ có nhiệm vụ định tuyến câu hỏi tới đúng chuyên gia, không tự trả lời nội dung.",
         tools=SUPERVISOR_TOOLS,

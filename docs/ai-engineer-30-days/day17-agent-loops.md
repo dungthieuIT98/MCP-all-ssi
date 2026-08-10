@@ -106,7 +106,7 @@ def run_agent(user_message: str):
             return {"status": "stopped", "reason": "time_budget_exceeded", "iteration": iteration}
 
         response = client.messages.create(
-            model="claude-sonnet-4-5",
+            model="claude-sonnet-5",
             max_tokens=1024,
             tools=TOOLS,
             messages=messages,

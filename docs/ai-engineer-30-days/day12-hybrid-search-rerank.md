@@ -80,7 +80,7 @@ claude = anthropic.Anthropic(api_key="YOUR_ANTHROPIC_API_KEY")
 
 def hyde_query(question: str) -> str:
     response = claude.messages.create(
-        model="claude-sonnet-4-5",
+        model="claude-sonnet-5",
         max_tokens=256,
         messages=[{
             "role": "user",

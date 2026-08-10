@@ -88,7 +88,7 @@ def augment_and_generate(query: str, chunks: list[tuple[str, str, float]]) -> st
     )
 
     response = claude.messages.create(
-        model="claude-sonnet-4-5",  # kiểm tra tên model mới nhất trong docs.anthropic.com trước khi dùng thật
+        model="claude-sonnet-5",  # kiểm tra tên model mới nhất trong docs.anthropic.com trước khi dùng thật
         max_tokens=1024,
         system=system_prompt,
         messages=[{

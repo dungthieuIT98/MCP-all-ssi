@@ -99,7 +99,7 @@ def execute_tool(order_id: str) -> dict:
 def call_anthropic(question: str):
     client = Anthropic()
     resp = client.messages.create(
-        model="claude-sonnet-4-5",
+        model="claude-sonnet-5",
         max_tokens=512,
         tools=[TOOL_DEF_ANTHROPIC],
         messages=[{"role": "user", "content": question}],

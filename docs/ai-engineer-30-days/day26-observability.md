@@ -127,12 +127,12 @@ def handle_request(user_input: str) -> str:
 
         with tracer.start_as_current_span("generate") as gen_span:
             response = client.messages.create(
-                model="claude-sonnet-4-5-20250929",
+                model="claude-sonnet-5",
                 max_tokens=300,
                 messages=[{"role": "user", "content": final_prompt}],
             )
             output_text = response.content[0].text
-            gen_span.set_attribute("generate.model", "claude-sonnet-4-5-20250929")
+            gen_span.set_attribute("generate.model", "claude-sonnet-5")
             gen_span.set_attribute("generate.input_tokens", response.usage.input_tokens)
             gen_span.set_attribute("generate.output_tokens", response.usage.output_tokens)
             gen_span.set_attribute("generate.output_redacted", redact_pii(output_text))

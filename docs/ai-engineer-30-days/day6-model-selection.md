@@ -69,8 +69,8 @@ client = anthropic.Anthropic()
 # Minh hoạ routing rule-based đơn giản: map loại tác vụ sang model phù hợp.
 # Đây là cách bắt đầu tối thiểu, không cần logic phức tạp ngay từ đầu.
 MODEL_CHO_TAC_VU = {
-    "phan_loai": "claude-haiku-4-5",       # tác vụ đơn giản, không gian đầu ra hẹp
-    "tom_tat_ngan": "claude-haiku-4-5",
+    "phan_loai": "claude-haiku-4-5-20251001",       # tác vụ đơn giản, không gian đầu ra hẹp
+    "tom_tat_ngan": "claude-haiku-4-5-20251001",
     "phan_tich_sau": "claude-opus-5",       # suy luận nhiều bước, độ chính xác quan trọng
     "agent_nhieu_buoc": "claude-opus-5",
 }
@@ -98,7 +98,7 @@ goi_model_theo_tac_vu("phan_tich_sau", "Phân tích rủi ro của việc một 
 def phan_loai_voi_cascade(noi_dung: str) -> str:
     # Bước 1: thử model nhỏ, rẻ, nhanh.
     response = client.messages.create(
-        model="claude-haiku-4-5",
+        model="claude-haiku-4-5-20251001",
         max_tokens=50,
         messages=[{"role": "user", "content": (
             f"Phân loại chủ đề của câu sau vào 1 trong: kỹ_thuật, thanh_toán, khác. "

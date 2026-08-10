@@ -63,7 +63,7 @@ import anthropic
 client = anthropic.Anthropic()
 
 CHEAP_MODEL = "claude-3-5-haiku-20241022"
-STRONG_MODEL = "claude-sonnet-4-5-20250929"
+STRONG_MODEL = "claude-sonnet-5"
 
 # Phần "tĩnh" dài — ứng dụng thật có thể là tài liệu hướng dẫn nội bộ,
 # danh sách tool definition, hoặc few-shot example cố định.

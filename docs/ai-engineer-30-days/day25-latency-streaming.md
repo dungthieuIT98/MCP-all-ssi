@@ -69,7 +69,7 @@ def measure_ttft_ttlt(user_input: str, max_tokens: int = 300) -> dict:
     full_text = []
 
     with client.messages.stream(
-        model="claude-sonnet-4-5-20250929",
+        model="claude-sonnet-5",
         max_tokens=max_tokens,
         messages=[{"role": "user", "content": user_input}],
     ) as stream:
@@ -95,7 +95,7 @@ def call_with_bounded_retry(
     for attempt in range(max_retries + 1):
         try:
             response = client.messages.create(
-                model="claude-sonnet-4-5-20250929",
+                model="claude-sonnet-5",
                 max_tokens=300,
                 timeout=timeout_s,
                 messages=[{"role": "user", "content": user_input}],
