@@ -1,4 +1,4 @@
-# Ngày 29 — Mock system design interview: thiết kế 1 hệ AI Engineer từ đầu
+# Phần 29 — Mock system design interview: thiết kế 1 hệ AI Engineer từ đầu
 
 ## Mục tiêu hôm nay
 Không có lý thuyết mới. Ngày này ép bạn tổng hợp toàn bộ 28 ngày trước thành một buổi thiết kế hệ thống hoàn chỉnh, đúng dạng câu hỏi mà một AI Engineer senior bị hỏi khi phỏng vấn hoặc khi trình bày thiết kế trước tech lead/architect.
@@ -24,30 +24,30 @@ Một câu trả lời senior không nhảy ngay vào "dùng LangChain với Pin
 ### 1. Làm rõ yêu cầu và ràng buộc (5 phút)
 - Ai là người dùng cuối, tần suất dùng, độ trễ chấp nhận được (real-time hay chấp nhận vài giây/phút)?
 - Sai ở mức nào là chấp nhận được, sai ở mức nào là không chấp nhận được (ví dụ: trả lời chung sai thì chấp nhận, nhưng bịa ra số liệu tài chính cụ thể thì không)?
-- Có dữ liệu nhạy cảm/PII/thông tin khách hàng trong luồng không? (quyết định toàn bộ thiết kế guardrail — liên hệ Ngày 27–28)
+- Có dữ liệu nhạy cảm/PII/thông tin khách hàng trong luồng không? (quyết định toàn bộ thiết kế guardrail — liên hệ Phần 27-28)
 - Ngân sách vận hành: có giới hạn cost/tháng rõ ràng không, hay chỉ cần "hợp lý"?
 
 ### 2. Kiến trúc tổng thể ở mức khối (block diagram bằng chữ)
 Với cả 3 đề, khối chung luôn có: nguồn input → (có RAG hay không, có tool-calling hay không) → LLM call → guardrail output → nơi lưu/trả kết quả → observability xuyên suốt. Phần khác nhau giữa 3 đề là **cái gì đứng giữa input và LLM call**:
 - Đề A: bắt buộc có RAG (Tuần 2) — không có RAG thì không thể trích nguồn/không bịa.
-- Đề B: có thể không cần RAG (nếu category cố định, few-shot đủ) hoặc cần RAG nhẹ (nếu có kho câu trả lời chuẩn để agent tham khảo) — cần agent loop đơn giản (Tuần 3, Ngày 17) để quyết định tự trả lời hay chuyển người.
-- Đề C: cần tool-calling (Tuần 3, Ngày 15) để agent gọi hàm chạy SQL thật, KHÔNG để LLM tự "đoán" số liệu — đây là lỗi thiết kế nghiêm trọng nhất người mới hay mắc ở đề này.
+- Đề B: có thể không cần RAG (nếu category cố định, few-shot đủ) hoặc cần RAG nhẹ (nếu có kho câu trả lời chuẩn để agent tham khảo) — cần agent loop đơn giản (Tuần 3, Phần 17) để quyết định tự trả lời hay chuyển người.
+- Đề C: cần tool-calling (Tuần 3, Phần 15) để agent gọi hàm chạy SQL thật, KHÔNG để LLM tự "đoán" số liệu — đây là lỗi thiết kế nghiêm trọng nhất người mới hay mắc ở đề này.
 
-### 3. Chọn model và giải thích trade-off (Tuần 1, Ngày 6)
-Không có đáp án "model tốt nhất" — chỉ có model phù hợp với ràng buộc đã làm rõ ở bước 1. Trả lời phải nêu được: vì sao chọn model này thay vì model khác, có cần routing giữa model rẻ/đắt không (Ngày 24), context window có đủ cho use case không (Ngày 2).
+### 3. Chọn model và giải thích trade-off (Tuần 1, Phần 6)
+Không có đáp án "model tốt nhất" — chỉ có model phù hợp với ràng buộc đã làm rõ ở bước 1. Trả lời phải nêu được: vì sao chọn model này thay vì model khác, có cần routing giữa model rẻ/đắt không (Phần 24), context window có đủ cho use case không (Phần 2).
 
 ### 4. Thiết kế phần đặc thù (RAG hoặc agent, tuỳ đề)
-- Nếu có RAG: chunking strategy cụ thể cho loại tài liệu của đề (Ngày 10), có hybrid search/rerank không hay dense retrieval đơn giản đã đủ (Ngày 12) — đừng thêm rerank nếu chưa đo được retrieval kém ở đâu.
-- Nếu có agent/tool: liệt kê chính xác tool nào, input/output schema của từng tool (Ngày 4, 15), điều kiện dừng loop (Ngày 17), ai/cái gì có quyền gọi tool nào (Ngày 20) — đề B và C đụng trực tiếp câu hỏi identity vì hành động thay người dùng thật.
+- Nếu có RAG: chunking strategy cụ thể cho loại tài liệu của đề (Phần 10), có hybrid search/rerank không hay dense retrieval đơn giản đã đủ (Phần 12) — đừng thêm rerank nếu chưa đo được retrieval kém ở đâu.
+- Nếu có agent/tool: liệt kê chính xác tool nào, input/output schema của từng tool (Phần 4, 15), điều kiện dừng loop (Phần 17), ai/cái gì có quyền gọi tool nào (Phần 20) — đề B và C đụng trực tiếp câu hỏi identity vì hành động thay người dùng thật.
 
-### 5. Eval trước khi nói "xong" (Tuần 4, Ngày 22–23)
+### 5. Eval trước khi nói "xong" (Tuần 4, Phần 22-23)
 Nêu rõ: golden dataset sẽ gồm loại câu hỏi gì (ít nhất phải có câu hỏi "đúng phạm vi", "ngoài phạm vi", "mơ hồ/thiếu thông tin"), metric nào đo được (không chỉ "trông đúng"), ai review kết quả eval trước khi lên production.
 
 ### 6. Vận hành thật: cost, latency, observability, guardrail (Tuần 4)
-- Ước lượng cost ở mức thứ tự lớn (không cần số chính xác): bao nhiêu request/ngày × độ dài prompt trung bình × giá tương đối của model đã chọn — có cần caching/batching không (Ngày 24).
-- Latency budget: phần nào chạy đồng bộ chờ người dùng, phần nào chạy nền được (Ngày 25).
-- Trace được request lỗi từ đâu ra đâu (Ngày 26).
-- Guardrail input/output cụ thể cho đề đã chọn, đặc biệt nếu có dữ liệu khách hàng/tài chính (Ngày 27–28) — nêu rõ điểm nào cần con người duyệt, không để hệ thống tự quyết.
+- Ước lượng cost ở mức thứ tự lớn (không cần số chính xác): bao nhiêu request/ngày × độ dài prompt trung bình × giá tương đối của model đã chọn — có cần caching/batching không (Phần 24).
+- Latency budget: phần nào chạy đồng bộ chờ người dùng, phần nào chạy nền được (Phần 25).
+- Trace được request lỗi từ đâu ra đâu (Phần 26).
+- Guardrail input/output cụ thể cho đề đã chọn, đặc biệt nếu có dữ liệu khách hàng/tài chính (Phần 27-28) — nêu rõ điểm nào cần con người duyệt, không để hệ thống tự quyết.
 
 ### 7. Nói thẳng phần chưa chắc / rủi ro còn lại
 Một câu trả lời senior luôn kết bằng việc tự nêu điểm yếu của chính thiết kế mình vừa trình bày — ví dụ "retrieval sẽ kém nếu tài liệu có nhiều bảng số liệu, cần đo lại sau khi có dữ liệu thật", "chưa tính được rõ tần suất người dùng sẽ hỏi ngoài phạm vi, cần theo dõi thêm ở giai đoạn online eval". Junior thường trình bày như thể thiết kế của mình hoàn hảo — đây là dấu hiệu dễ nhận ra nhất khi phân biệt junior/senior trong phỏng vấn.
@@ -57,7 +57,7 @@ Một câu trả lời senior luôn kết bằng việc tự nêu điểm yếu 
 2. Đổi đề (làm thêm 1 trong 2 đề còn lại), lần này giới hạn 45 phút — tốc độ nhanh hơn thật hơn buộc bạn ưu tiên đúng phần quan trọng, bỏ qua phần chi tiết không cần.
 3. Nếu có đồng nghiệp/bạn cùng học, đổi vai: một người hỏi xoáy vào phần yếu nhất của thiết kế (giống phỏng vấn thật), người kia phải bảo vệ hoặc thừa nhận và sửa lại ngay tại chỗ.
 
-## Checklist trước khi qua Ngày 30
+## Checklist trước khi qua Phần 30
 - [ ] Đã hoàn thành khung 7 bước cho ít nhất 1 đề, có ghi ra giấy/file, không chỉ nghĩ trong đầu.
 - [ ] Thiết kế có nêu rõ eval plan, không chỉ nêu kiến trúc.
 - [ ] Thiết kế có phần cost/latency ước lượng được, không bỏ trống.

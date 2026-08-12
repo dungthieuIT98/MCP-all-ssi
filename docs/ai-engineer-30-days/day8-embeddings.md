@@ -1,4 +1,4 @@
-# Ngày 8 — Embeddings là gì, đo similarity thế nào
+# Phần 8 — Embeddings là gì, đo similarity thế nào
 
 ## Mục tiêu hôm nay
 Hiểu embedding là nền tảng của mọi hệ RAG/semantic search — dev backend quen thuộc với index B-tree/hash trong SQL, nhưng "tìm theo ý nghĩa" cần một biểu diễn số hoàn toàn khác, và chọn sai model/metric ở bước này thì mọi tầng phía trên (chunking, retrieval, rerank) đều xây trên cát.
@@ -25,7 +25,7 @@ Ba metric phổ biến, và sự khác biệt không chỉ là công thức toá
 - **Dot product (inner product)**: `A·B`, không chuẩn hoá độ dài. Nếu vector đã được model chuẩn hoá về unit length (norm = 1) — nhiều model embedding hiện đại làm sẵn bước này — thì dot product và cosine similarity cho kết quả **tương đương về thứ tự ranking**, nhưng dot product tính rẻ hơn (không cần chia cho norm mỗi lần so sánh). Đây là lý do nhiều vector DB mặc định dùng dot product khi biết trước model output đã normalize: tối ưu tốc độ mà không đổi kết quả.
 - **Euclidean distance (L2)**: đo khoảng cách "thẳng" trong không gian, nhạy với độ dài vector. Phù hợp khi bài toán thực sự cần biết "khác nhau bao nhiêu" về magnitude (ví dụ clustering trên feature vector số liệu thô), nhưng với embedding text đã chuẩn hoá thì L2 và cosine cho thứ tự ranking giống nhau về mặt toán học (`||A-B||² = 2 - 2×cos(θ)` khi cả hai là unit vector) — nên với text, chọn cosine hoặc dot product là đủ, L2 ít khi cần thiết trừ khi thư viện/index chỉ hỗ trợ L2.
 
-Quy tắc thực dụng: đọc tài liệu của **chính embedding model** đang dùng để biết nó được train/khuyến nghị dùng với metric nào (Voyage AI, OpenAI đều ghi rõ trong docs) — dùng sai metric so với lúc train không gây lỗi cú pháp nhưng làm giảm chất lượng ranking một cách âm thầm, khó phát hiện nếu không có eval (xem Ngày 13).
+Quy tắc thực dụng: đọc tài liệu của **chính embedding model** đang dùng để biết nó được train/khuyến nghị dùng với metric nào (Voyage AI, OpenAI đều ghi rõ trong docs) — dùng sai metric so với lúc train không gây lỗi cú pháp nhưng làm giảm chất lượng ranking một cách âm thầm, khó phát hiện nếu không có eval (xem Phần 13).
 
 ### Embedding model: không có "một model cho tất cả"
 - **Anthropic không có embedding model riêng** — Claude là model sinh text (generation), không phải model embedding. Docs của Anthropic khuyến nghị dùng **Voyage AI** làm nhà cung cấp embedding đi kèm khi xây hệ thống dùng Claude cho phần generate.
@@ -40,7 +40,7 @@ Chiều vector (dimension) là tham số quyết định trade-off giữa chất
 - Dimension cao hơn (ví dụ 3072 so với 1536) **thường** biểu diễn ngữ nghĩa chi tiết hơn, nhưng không tuyến tính — vượt một ngưỡng nào đó, tăng dimension không còn cải thiện đáng kể chất lượng retrieval mà chỉ tăng chi phí.
 - Chi phí tăng theo dimension ở **3 chỗ**: (1) băng thông/latency khi gọi API embedding, (2) dung lượng lưu trữ trong vector DB (mỗi vector là `dimension × 4 bytes` nếu lưu float32), (3) tốc độ tính similarity và build index ANN — index HNSW trên vector 3072 chiều chậm hơn đáng kể so với 1024 chiều ở cùng số lượng record.
 - Nhiều model hiện đại hỗ trợ **giảm chiều ngay tại API** (ví dụ tham số `dimensions` của OpenAI `text-embedding-3`) nhờ kỹ thuật train Matryoshka Representation Learning — cắt bớt chiều cuối vector vẫn giữ được phần lớn chất lượng, tốt hơn nhiều so với tự làm PCA sau khi đã có vector đủ chiều.
-- Quyết định thực dụng: bắt đầu với dimension mặc định của model, đo retrieval quality (Ngày 13) trước, chỉ giảm dimension khi có bằng chứng chi phí/latency là vấn đề thật — đừng tối ưu sớm dựa trên cảm giác "vector nhỏ thì nhanh hơn".
+- Quyết định thực dụng: bắt đầu với dimension mặc định của model, đo retrieval quality (Phần 13) trước, chỉ giảm dimension khi có bằng chứng chi phí/latency là vấn đề thật — đừng tối ưu sớm dựa trên cảm giác "vector nhỏ thì nhanh hơn".
 
 ## Đối chiếu với code thật trong repo
 Repo `mcp-superset` không có embedding hay vector DB — đây là điểm liên hệ ngược lại có ích: `tools/dataset.py` định nghĩa "dataset" là dữ liệu **có cấu trúc** (bảng, cột, kiểu dữ liệu tường minh trong Superset) — đối lập hoàn toàn với đầu vào của một embedding pipeline, luôn là dữ liệu **phi cấu trúc hoặc bán cấu trúc** (đoạn văn, tài liệu, đoạn code) mà không có "cột" nào để `WHERE` hay `JOIN` trực tiếp. Khi một dataset trong Superset đã có schema rõ (tên cột, kiểu dữ liệu), câu hỏi "SSI Q3 revenue là bao nhiêu" nên trả lời bằng SQL query trực tiếp (`superset_dataset_get_by_id` rồi query), không cần embedding — chỉ khi câu hỏi cần tìm trong văn bản tự do (báo cáo PDF, tài liệu chính sách, email) thì mới cần bước embed. Nhầm lẫn hai loại bài toán này là lỗi kiến trúc phổ biến của backend dev mới học RAG: thấy "hỏi đáp bằng AI" là nghĩ ngay tới vector DB, dù dữ liệu đang có sẵn structured và SQL trả lời chính xác hơn, rẻ hơn.
@@ -95,7 +95,7 @@ Vector từ hai model (hoặc hai version của cùng model) **không so sánh �
 ## Bài tập senior
 Team đang có một hệ thống search nội bộ dùng PostgreSQL full-text search (`tsvector`/`tsquery`) cho tài liệu quy trình nội bộ SSI, đang bị phàn nàn là "tìm không ra dù tài liệu có nội dung liên quan" vì nhân viên gõ từ khoá khác cách diễn đạt trong tài liệu gốc. Sếp đề xuất "thêm embedding vào cho nó AI hơn". Viết một đề xuất ngắn (dạng bullet, không cần code) trả lời: (a) embedding một mình có giải quyết được vấn đề gốc không, hay cần kết hợp gì thêm; (b) rủi ro/chi phí nào phát sinh khi thêm embedding (data cần rời khỏi Postgres đi qua API bên thứ 3? domain thuật ngữ nội bộ có được model general-purpose hiểu đúng không?); (c) có cần vector DB riêng hay pgvector là đủ ở quy mô này — biết rằng data hiện tại chỉ vài nghìn tài liệu.
 
-## Checklist trước khi qua Ngày 9
+## Checklist trước khi qua Phần 9
 - [ ] Giải thích được embedding khác full-text search ở điểm nào, bằng ví dụ cụ thể không chỉ lý thuyết.
 - [ ] Biết khi nào dùng cosine, khi nào dot product đủ (và vì sao lại tương đương khi vector đã normalize).
 - [ ] Biết Anthropic không có embedding model, và tên nhà cung cấp được khuyến nghị thay thế.

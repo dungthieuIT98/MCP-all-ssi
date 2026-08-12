@@ -1,18 +1,18 @@
-# Ngày 14 — Ôn tập tuần 2: build RAG trên tài liệu Superset thật
+# Phần 14 — Ôn tập tuần 2: build RAG trên tài liệu Superset thật
 
 ## Mục tiêu hôm nay
-Không có lý thuyết mới. Ghép toàn bộ Ngày 8-13 (embedding, vector DB, chunking, pipeline, hybrid search/rerank, eval) thành một hệ RAG hoàn chỉnh, chạy được, trên một corpus thật — không phải dữ liệu giả lập vài câu như các bài thực hành trước. Đây là bài kiểm tra thật: nếu chỉ hiểu lý thuyết mà chưa từng ráp một pipeline đầy đủ chịu được câu hỏi lộn xộn của người dùng thật, hôm nay sẽ lộ ra ngay.
+Không có lý thuyết mới. Ghép toàn bộ Phần 8-13 (embedding, vector DB, chunking, pipeline, hybrid search/rerank, eval) thành một hệ RAG hoàn chỉnh, chạy được, trên một corpus thật — không phải dữ liệu giả lập vài câu như các bài thực hành trước. Đây là bài kiểm tra thật: nếu chỉ hiểu lý thuyết mà chưa từng ráp một pipeline đầy đủ chịu được câu hỏi lộn xộn của người dùng thật, hôm nay sẽ lộ ra ngay.
 
 ## Mô tả dự án
 
 Xây một hệ RAG trả lời câu hỏi về Apache Superset, dùng một trong hai corpus (hoặc cả hai để so sánh):
 - **Corpus A — tài liệu chính thức**: một phần của [docs.superset.apache.org](https://superset.apache.org/docs/) (crawl hoặc tải thủ công một số trang liên quan tới chủ đề bạn quan tâm — ví dụ phần API, phần cấu hình database connection, phần dataset). Không cần crawl toàn bộ site, vài chục trang đủ để có corpus thật với cấu trúc heading/code block thật.
-- **Corpus B — chính repo `mcp-superset`**: `README.md`, docstring và comment trong `core/`, `tools/`, `utils/` — một corpus nhỏ hơn nhưng có sẵn, có cấu trúc code thật (đúng bài toán "chunk theo ranh giới hàm" đã học ở Ngày 10).
+- **Corpus B — chính repo `mcp-superset`**: `README.md`, docstring và comment trong `core/`, `tools/`, `utils/` — một corpus nhỏ hơn nhưng có sẵn, có cấu trúc code thật (đúng bài toán "chunk theo ranh giới hàm" đã học ở Phần 10).
 
 Khuyến nghị làm cả hai nếu còn thời gian: Corpus A luyện chunking theo markdown/heading trên tài liệu dài; Corpus B luyện chunking theo code block/docstring — hai bài toán chunking khác nhau rõ rệt, cả hai đều có giá trị nghề nghiệp thật (RAG trên tài liệu công khai, RAG trên codebase nội bộ).
 
 ### Yêu cầu chức năng tối thiểu
-1. Ingest pipeline: đọc corpus, chunk theo cấu trúc document (không chunk mù theo ký tự cố định — áp đúng nguyên tắc Ngày 10), embed, lưu vào pgvector hoặc Qdrant local.
+1. Ingest pipeline: đọc corpus, chunk theo cấu trúc document (không chunk mù theo ký tự cố định — áp đúng nguyên tắc Phần 10), embed, lưu vào pgvector hoặc Qdrant local.
 2. Query pipeline: nhận câu hỏi, retrieve (tối thiểu dense vector search; điểm cộng nếu có hybrid search hoặc rerank), augment prompt, generate câu trả lời bằng Claude.
 3. Citation: mọi câu trả lời phải kèm nguồn cụ thể (tên file/trang, section nếu có) — không chấp nhận câu trả lời "trôi" không trích dẫn được.
 4. Xử lý câu hỏi ngoài phạm vi corpus: hỏi một câu chắc chắn không có trong corpus (ví dụ "Superset có hỗ trợ nấu ăn không") — hệ thống phải từ chối rõ ràng, không suy diễn hoặc hallucinate một câu trả lời nghe hợp lý.

@@ -1,4 +1,4 @@
-# Ngày 12 — Hybrid search, reranking, query rewriting
+# Phần 12 — Hybrid search, reranking, query rewriting
 
 ## Mục tiêu hôm nay
 Học các kỹ thuật nâng cấp retrieval vượt ra ngoài "cosine similarity thuần" — đây là ranh giới rõ nhất giữa một RAG demo và một RAG production, vì retrieval thuần vector luôn có những điểm mù mà hybrid search, rerank, và query rewriting được thiết kế để bù lại.
@@ -11,7 +11,7 @@ Học các kỹ thuật nâng cấp retrieval vượt ra ngoài "cosine similari
 ## Khái niệm cốt lõi
 
 ### Vì sao vector search thuần không đủ
-Vector similarity (Ngày 8) rất mạnh với việc bắt ngữ nghĩa tổng quát, nhưng có một điểm yếu cụ thể: nó kém với **exact match** — mã số, tên riêng, từ viết tắt, số liệu chính xác. Ví dụ câu hỏi "mã dataset ID 4521 là gì" — về ngữ nghĩa, "4521" không mang nhiều thông tin cho embedding model tổng quát; hai chunk chứa "ID 4521" và "ID 9932" có thể có similarity với câu hỏi gần như nhau, vì embedding model không được train để phân biệt tinh vi giữa các số nếu ngữ cảnh xung quanh giống nhau. Đây chính xác là bài toán mà tìm kiếm từ khoá truyền thống (keyword/lexical search) giải quyết tốt — khớp chuỗi ký tự chính xác, không quan tâm ngữ nghĩa.
+Vector similarity (Phần 8) rất mạnh với việc bắt ngữ nghĩa tổng quát, nhưng có một điểm yếu cụ thể: nó kém với **exact match** — mã số, tên riêng, từ viết tắt, số liệu chính xác. Ví dụ câu hỏi "mã dataset ID 4521 là gì" — về ngữ nghĩa, "4521" không mang nhiều thông tin cho embedding model tổng quát; hai chunk chứa "ID 4521" và "ID 9932" có thể có similarity với câu hỏi gần như nhau, vì embedding model không được train để phân biệt tinh vi giữa các số nếu ngữ cảnh xung quanh giống nhau. Đây chính xác là bài toán mà tìm kiếm từ khoá truyền thống (keyword/lexical search) giải quyết tốt — khớp chuỗi ký tự chính xác, không quan tâm ngữ nghĩa.
 
 ### BM25 — sparse search, khái niệm cốt lõi
 BM25 (Best Matching 25) là thuật toán ranking dựa trên tần suất từ, biến thể cải tiến của TF-IDF — tính điểm liên quan giữa query và document dựa trên: từ trong query xuất hiện bao nhiêu lần trong document (term frequency), từ đó hiếm hay phổ biến trong toàn bộ corpus (inverse document frequency — từ hiếm mang nhiều thông tin phân biệt hơn từ phổ biến), có điều chỉnh giảm ảnh hưởng khi document quá dài. Gọi là "sparse" vì biểu diễn mỗi document là một vector rất lớn (kích thước bằng từ vựng toàn corpus) nhưng hầu hết giá trị bằng 0 — đối lập với "dense" vector của embedding (vài trăm/nghìn chiều, hầu như không có giá trị 0). BM25 là nền tảng của Elasticsearch, Postgres full-text search (`tsvector`/`tsquery` dùng biến thể tương tự), và các vector DB hiện đại (Qdrant, Weaviate) đều có hỗ trợ BM25 built-in để kết hợp.
@@ -19,7 +19,7 @@ BM25 (Best Matching 25) là thuật toán ranking dựa trên tần suất từ,
 ### Hybrid search — kết hợp dense và sparse
 Hybrid search chạy cả hai: dense vector search (bắt ngữ nghĩa) và BM25/sparse search (bắt exact match), rồi **kết hợp điểm số** của hai phương pháp thành một ranking cuối. Cách kết hợp phổ biến nhất là **Reciprocal Rank Fusion (RRF)**: với mỗi document, lấy vị trí rank của nó trong mỗi danh sách kết quả (dense và sparse riêng biệt), tính điểm dựa trên nghịch đảo rank (`1/(k + rank)`, k là hằng số làm mượt), cộng điểm từ cả hai danh sách. RRF được ưa dùng vì không cần chuẩn hoá thang điểm giữa hai phương pháp có bản chất khác nhau (cosine similarity và BM25 score không cùng đơn vị đo, không thể cộng trực tiếp một cách có ý nghĩa) — RRF chỉ quan tâm **thứ hạng**, không quan tâm giá trị tuyệt đối của điểm.
 
-Kết quả thực tế: hybrid search thường cho retrieval quality tốt hơn dùng riêng một phương pháp, đặc biệt với corpus có nhiều thuật ngữ chuyên ngành/mã số/tên riêng (đúng đặc điểm của tài liệu tài chính, mã chứng khoán, quy định pháp lý) — không có gì đảm bảo tuyệt đối cho mọi trường hợp, nên vẫn cần đo bằng eval (Ngày 13) trên dữ liệu thật của mình, không mặc định tin lý thuyết.
+Kết quả thực tế: hybrid search thường cho retrieval quality tốt hơn dùng riêng một phương pháp, đặc biệt với corpus có nhiều thuật ngữ chuyên ngành/mã số/tên riêng (đúng đặc điểm của tài liệu tài chính, mã chứng khoán, quy định pháp lý) — không có gì đảm bảo tuyệt đối cho mọi trường hợp, nên vẫn cần đo bằng eval (Phần 13) trên dữ liệu thật của mình, không mặc định tin lý thuyết.
 
 ### Reranking — cross-encoder
 Retrieval ban đầu (dense, sparse, hoặc hybrid) thường dùng cách tính similarity "rẻ" (so sánh vector đã encode sẵn, hoặc BM25 score) để có thể chạy nhanh trên hàng triệu document — gọi là **bi-encoder** approach (query và document được encode độc lập, không "nhìn thấy nhau" lúc encode). Reranking dùng một model khác, **cross-encoder**, nhận cả query và document **cùng lúc** làm input, cho phép model học tương tác trực tiếp giữa hai chuỗi text — chính xác hơn nhiều nhưng chậm hơn đáng kể (không thể tiền tính toán trước như bi-encoder, phải chạy inference cho mỗi cặp query-document tại thời điểm query).
@@ -93,7 +93,7 @@ def hyde_query(question: str) -> str:
 ```
 
 ## Bài tập tự làm
-1. Với corpus nhỏ đã có từ Ngày 11, thử một câu hỏi chứa mã số hoặc tên riêng cụ thể (ví dụ "tool nào có tên `superset_dataset_refresh_columns`") — so sánh kết quả retrieval thuần dense vector so với thêm exact-match/keyword filter, quan sát dense-only có bắt trúng không.
+1. Với corpus nhỏ đã có từ Phần 11, thử một câu hỏi chứa mã số hoặc tên riêng cụ thể (ví dụ "tool nào có tên `superset_dataset_refresh_columns`") — so sánh kết quả retrieval thuần dense vector so với thêm exact-match/keyword filter, quan sát dense-only có bắt trúng không.
 2. Cài `cohere` (hoặc dùng rerank model khác có sẵn), lấy top-20 candidate từ retrieval thô, rerank xuống top-5 — so sánh top-5 trước và sau rerank bằng mắt, xem thứ tự có hợp lý hơn không.
 3. Viết thử HyDE cho 1 câu hỏi, in ra "câu trả lời giả định" mà LLM sinh, và so sánh similarity của nó với các chunk thật trong corpus so với similarity của câu hỏi gốc.
 
@@ -103,7 +103,7 @@ def hyde_query(question: str) -> str:
 `RRF_score(d) = Σ 1/(k + rank_i(d))` với tổng chạy qua mọi danh sách kết quả `i` mà document `d` xuất hiện, `rank_i(d)` là vị trí của `d` trong danh sách đó (1-indexed), `k` là hằng số làm mượt (giá trị phổ biến trong tài liệu kỹ thuật là 60, nhưng nên coi là tham số cần tinh chỉnh theo dữ liệu thật, không phải hằng số cố định tuyệt đối). Tính chất quan trọng: document xuất hiện ở rank cao trong **nhiều** danh sách được ưu tiên hơn document chỉ xuất hiện tốt trong một danh sách — đúng tinh thần "đồng thuận giữa nhiều tín hiệu đáng tin hơn một tín hiệu".
 
 ### Khi nào rerank không đáng chi phí thêm
-Rerank thêm latency (một lượt gọi model/API nữa) và chi phí — với use case cần trả lời tức thì (dưới một ngưỡng latency chặt), hoặc corpus nhỏ mà retrieval thô đã đủ chính xác (đo được qua eval, Ngày 13), thêm rerank có thể là tối ưu hoá không cần thiết. Quyết định thêm rerank nên dựa trên đo lường retrieval quality trước/sau, không phải vì "ai cũng làm vậy".
+Rerank thêm latency (một lượt gọi model/API nữa) và chi phí — với use case cần trả lời tức thì (dưới một ngưỡng latency chặt), hoặc corpus nhỏ mà retrieval thô đã đủ chính xác (đo được qua eval, Phần 13), thêm rerank có thể là tối ưu hoá không cần thiết. Quyết định thêm rerank nên dựa trên đo lường retrieval quality trước/sau, không phải vì "ai cũng làm vậy".
 
 ### Multi-query và chi phí nhân bản
 Multi-query nhân số lượt gọi vector DB lên theo số phiên bản câu hỏi sinh ra — với hệ thống có traffic cao, chi phí này cộng dồn đáng kể. Một biến thể tiết kiệm hơn là chỉ áp multi-query có điều kiện (ví dụ chỉ khi retrieval lần đầu cho kết quả confidence thấp), thay vì áp cho mọi câu hỏi.
@@ -111,7 +111,7 @@ Multi-query nhân số lượt gọi vector DB lên theo số phiên bản câu 
 ## Bài tập senior
 Hệ thống RAG hiện tại của team chỉ dùng dense vector search, đang gặp vấn đề: người dùng hỏi bằng mã sản phẩm/mã báo cáo cụ thể (ví dụ "báo cáo RPT-2024-Q3-117") thường không tìm ra tài liệu đúng, dù tài liệu đó có tồn tại và chứa đúng mã đó. Đề xuất một giải pháp (mô tả kiến trúc, không cần code đầy đủ) giải quyết vấn đề này, và trả lời: (a) tại sao dense vector search một mình không xử lý tốt trường hợp này; (b) thêm hybrid search có làm chậm hệ thống đáng kể không, cần đo gì để biết; (c) nếu chỉ được chọn một trong hai — thêm hybrid search hoặc thêm rerank — trong tình huống cụ thể này, chọn cái nào trước và vì sao.
 
-## Checklist trước khi qua Ngày 13
+## Checklist trước khi qua Phần 13
 - [ ] Giải thích được vì sao dense vector search một mình yếu với exact match (mã số, tên riêng).
 - [ ] Hiểu khái niệm BM25 ở mức đủ để biết khi nào nó bổ trợ tốt cho dense search.
 - [ ] Giải thích được RRF dùng rank thay vì điểm số trực tiếp, và vì sao cách đó hợp lý khi kết hợp hai phương pháp khác bản chất.

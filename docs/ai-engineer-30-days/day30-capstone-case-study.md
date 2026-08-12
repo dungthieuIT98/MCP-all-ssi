@@ -1,4 +1,4 @@
-# Ngày 30 — Case study: audit và đề xuất nâng cấp `mcp-superset` theo góc nhìn AI Engineer
+# Phần 30 — Case study: audit và đề xuất nâng cấp `mcp-superset` theo góc nhìn AI Engineer
 
 ## Mục tiêu hôm nay
 Không có lý thuyết mới. Đây là bài tập tổng hợp cuối cùng: áp toàn bộ 29 ngày trước lên một codebase thật đang tồn tại trong chính repo này — `mcp-superset`. Mục tiêu không phải "tìm lỗi cho có" mà là tập luyện đúng kỹ năng senior thật: đọc một hệ thống người khác viết, đánh giá nó theo khung production (eval/cost/latency/security), và viết ra đề xuất có ưu tiên — kỹ năng bạn sẽ dùng liên tục khi review code AI của đồng nghiệp hoặc khi nhận bàn giao một hệ thống AI có sẵn.
@@ -18,22 +18,22 @@ Không có lý thuyết mới. Đây là bài tập tổng hợp cuối cùng: �
 
 Tự làm, không cần thảo luận với ai — đây là bài tập đọc code + viết đánh giá, giống hệt việc bạn sẽ làm khi được giao review một PR AI thật hoặc nhận bàn giao hệ thống từ đội khác.
 
-### Trục 1 — Tool design (liên hệ Ngày 15–16)
+### Trục 1 — Tool design (liên hệ Phần 15-16)
 Đọc 2-3 tool trong [`tools/chart.py`](../../tools/chart.py) hoặc [`tools/dashboard.py`](../../tools/dashboard.py). Với mỗi tool, tự trả lời:
 1. Docstring có đủ rõ để một LLM chọn đúng tool này thay vì tool khác không? Có mô tả rõ khi nào dùng, tham số nào optional/bắt buộc, giá trị hợp lệ của từng tham số không?
 2. Tên tool (`superset_chart_list`, `superset_chart_get_by_id`...) có theo pattern nhất quán giúp LLM suy luận được tool tương tự cho resource khác (ví dụ đoán được có `superset_dashboard_list` mà không cần đọc) không?
 3. Tool nào có khả năng chồng lấp chức năng với tool khác (dễ gây model chọn sai)?
 
-### Trục 2 — Identity & authorization (liên hệ Ngày 20, 27)
+### Trục 2 — Identity & authorization (liên hệ Phần 20, 27)
 Đây là phần thiết kế đáng chú ý nhất của repo: **không có service-account credential chung** — mọi tool bắt buộc `@requires_auth`, và `requires_auth` chỉ pass nếu `get_caller_session` đọc được session cookie thật của người gọi từ header `X-Superset-Session`. Nói cách khác, mọi request tới Superset API mang đúng identity + Row-Level-Security của người dùng thật, không phải quyền của "con bot".
-1. Đây chính là pattern *on-behalf-of / identity pass-through* đã học ở Ngày 20 — tự giải thích bằng lời của bạn (không copy lại tài liệu) vì sao pattern này an toàn hơn một service account chung có toàn quyền.
+1. Đây chính là pattern *on-behalf-of / identity pass-through* đã học ở Phần 20 — tự giải thích bằng lời của bạn (không copy lại tài liệu) vì sao pattern này an toàn hơn một service account chung có toàn quyền.
 2. Giả sử một client MCP bị cấu hình sai và gửi lẫn session cookie của user A vào request đang xử lý cho user B (lỗi runtime, không phải lỗi cố ý) — nhìn vào code hiện tại, cơ chế nào (nếu có) phát hiện được việc này? Nếu không có, đề xuất 1 cách phát hiện (gợi ý: đối chiếu identity trả về từ `superset_auth_check_session_validity` hoặc `USER_ME` với identity mong đợi ở tầng gọi).
 3. `core/config.py` có giá trị `SUPERSET_BASE_URL` default trỏ tới một môi trường cụ thể nếu biến môi trường không được set. Từ góc nhìn vận hành nhiều môi trường (dev/UAT/prod), giá trị default "âm thầm" này có rủi ro gì nếu ai đó quên set biến môi trường khi deploy?
 
-### Trục 3 — Error handling & observability (liên hệ Ngày 26–27)
+### Trục 3 — Error handling & observability (liên hệ Phần 26-27)
 Đọc [`utils/decorators.py`](../../utils/decorators.py), hàm `handle_api_errors`.
-1. Hàm này bắt mọi exception và trả `{"error": f"Unexpected error in {function_name}: {str(e)}"}`. Từ góc nhìn *Improper Output Handling* (Ngày 27): `str(e)` có khả năng lộ thông tin gì ra phía client MCP (đường dẫn file, chi tiết nội bộ của lỗi HTTP, có thể cả một phần nội dung response từ Superset)? Đề xuất 1 cách giảm rủi ro này mà không làm mất thông tin cần để debug (gợi ý: log đầy đủ ở server, chỉ trả về phía client 1 message rút gọn + mã lỗi tra cứu được).
-2. Hiện tại không có bước log/trace tường minh nào cho việc "tool nào được gọi, bởi ai, kết quả gì, mất bao lâu" (theo khái niệm Ngày 26). Đề xuất tối thiểu 3 trường bạn sẽ thêm vào log nếu được giao task "thêm observability cho MCP server này", và giải thích ngắn vì sao chọn đúng 3 trường đó trước (không phải log tất cả ngay từ đầu).
+1. Hàm này bắt mọi exception và trả `{"error": f"Unexpected error in {function_name}: {str(e)}"}`. Từ góc nhìn *Improper Output Handling* (Phần 27): `str(e)` có khả năng lộ thông tin gì ra phía client MCP (đường dẫn file, chi tiết nội bộ của lỗi HTTP, có thể cả một phần nội dung response từ Superset)? Đề xuất 1 cách giảm rủi ro này mà không làm mất thông tin cần để debug (gợi ý: log đầy đủ ở server, chỉ trả về phía client 1 message rút gọn + mã lỗi tra cứu được).
+2. Hiện tại không có bước log/trace tường minh nào cho việc "tool nào được gọi, bởi ai, kết quả gì, mất bao lâu" (theo khái niệm Phần 26). Đề xuất tối thiểu 3 trường bạn sẽ thêm vào log nếu được giao task "thêm observability cho MCP server này", và giải thích ngắn vì sao chọn đúng 3 trường đó trước (không phải log tất cả ngay từ đầu).
 
 ### Trục 4 — Ưu tiên hoá đề xuất
 Không phải mọi phát hiện ở trên đều nên làm ngay. Viết ra một bảng ngắn (loại "cao/trung/thấp") xếp hạng các đề xuất bạn vừa nêu theo mức độ ưu tiên thật nếu bạn là người phải trình bày với tech lead trong 10 phút — nêu rõ tiêu chí bạn dùng để xếp hạng (ví dụ: rủi ro bảo mật > khả năng debug > tiện lợi).
@@ -51,7 +51,7 @@ Nếu bạn hoàn thành đủ 30 ngày và làm nghiêm túc các "Bài tập s
 Bước tiếp theo tự nhiên sau lộ trình này không phải là học thêm framework mới, mà là **áp toàn bộ khung này lên 1 bài toán thật đang tồn tại ở nơi bạn làm việc** — cách học nhanh nhất từ đây trở đi là qua review thật và phản hồi thật từ hệ thống chạy production, không phải đọc thêm tài liệu.
 
 ## Checklist hoàn thành lộ trình
-- [ ] Đã tự làm ít nhất 1 đề system design đầy đủ (Ngày 29).
+- [ ] Đã tự làm ít nhất 1 đề system design đầy đủ (Phần 29).
 - [ ] Đã đọc và audit thật 3 file code trong `mcp-superset` theo 4 trục ở trên, viết ra nhận định bằng chữ (không chỉ đọc lướt).
 - [ ] Có thể tự giải thích bằng lời (không nhìn tài liệu) sự khác biệt giữa service-account credential chung và identity pass-through, và vì sao điều này quan trọng với agent có tool.
 - [ ] Có thể tự giải thích được khi nào RAG là cần thiết và khi nào chỉ là over-engineering.

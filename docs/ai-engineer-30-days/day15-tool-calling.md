@@ -1,4 +1,4 @@
-# Ngày 15 — Tool-calling: LLM chọn hàm thế nào, và vì sao chọn sai
+# Phần 15 — Tool-calling: LLM chọn hàm thế nào, và vì sao chọn sai
 
 ## Mục tiêu hôm nay
 Hiểu tool-calling ở mức cơ chế thật (không phải "AI biết gọi API") và nắm được pattern thực thi chuẩn: model đề xuất, code thực thi, không bao giờ ngược lại.
@@ -7,7 +7,7 @@ Hiểu tool-calling ở mức cơ chế thật (không phải "AI biết gọi A
 - [Anthropic — Tool use (function calling)](https://docs.anthropic.com/)
 - [OpenAI — Function calling](https://platform.openai.com/docs/)
 - Google AI — Gemini function calling (tìm trong tài liệu Gemini API, phần "Function calling")
-- Paper: "ReAct: Synergizing Reasoning and Acting in Language Models" (arxiv.org, Yao et al.) — nền tảng lý thuyết cho việc model "quyết định hành động" sẽ dùng ở Ngày 17, nhưng cơ chế sinh tool call ở ngày này là tiền đề bắt buộc phải hiểu trước.
+- Paper: "ReAct: Synergizing Reasoning and Acting in Language Models" (arxiv.org, Yao et al.) — nền tảng lý thuyết cho việc model "quyết định hành động" sẽ dùng ở Phần 17, nhưng cơ chế sinh tool call ở ngày này là tiền đề bắt buộc phải hiểu trước.
 
 ## Khái niệm cốt lõi
 
@@ -28,9 +28,9 @@ Ba điểm hay bị hiểu lầm:
    b. Code thực thi tool (gọi hàm Python, REST API, query DB...)
    c. Code gửi lại kết quả dưới dạng "tool_result" gắn với đúng tool_use_id
    d. Quay lại bước 1 với lịch sử đã nối thêm tool_use + tool_result
-4. Lặp tới khi model trả text thuần (không còn tool_use) hoặc đạt điều kiện dừng (Ngày 17)
+4. Lặp tới khi model trả text thuần (không còn tool_use) hoặc đạt điều kiện dừng (Phần 17)
 ```
-Không có bước nào trong đó model "tự chạy" tool. Đây là ranh giới an toàn quan trọng nhất của toàn bộ kiến trúc agent: **model chỉ đề xuất, code quyết định thực thi hay không** — chỗ này chính là nơi bạn áp least-privilege và validation (liên hệ Ngày 20).
+Không có bước nào trong đó model "tự chạy" tool. Đây là ranh giới an toàn quan trọng nhất của toàn bộ kiến trúc agent: **model chỉ đề xuất, code quyết định thực thi hay không** — chỗ này chính là nơi bạn áp least-privilege và validation (liên hệ Phần 20).
 
 ### Vì sao model chọn sai tool
 - **Schema mơ hồ**: field không ghi rõ đơn vị, format, hoặc range hợp lệ (`"date": "start date"` không nói format `YYYY-MM-DD` hay timestamp) khiến model đoán bừa.
@@ -40,7 +40,7 @@ Không có bước nào trong đó model "tự chạy" tool. Đây là ranh gi�
 - **Description viết cho người đọc, không viết cho model**: mô tả kiểu "Retrieves data" không cho model đủ tín hiệu để phân biệt khi nào dùng — description tốt phải nói rõ **khi nào dùng, khi nào KHÔNG dùng**, ví dụ kiểu input mong đợi và ví dụ cụ thể.
 
 ## Đối chiếu với code thật trong repo
-Repo `mcp-superset` là một ví dụ cụ thể của tool-calling triển khai qua MCP (chi tiết giao thức ở Ngày 16). Xem [`tools/chart.py`](../../tools/chart.py) dòng 20-35, hàm `superset_chart_list`: type hint Python (`Optional[str]`, `Optional[int]`) và docstring được framework FastMCP (thư viện `mcp`) tự chuyển thành JSON Schema mà model nhìn thấy — đúng cơ chế "tool schema nhúng vào context" nói ở trên, chỉ khác chỗ sinh schema là tự động từ code thay vì viết tay JSON. Docstring dòng 29-34 giải thích rõ `name_contains` lọc thế nào, `order_column` nhận giá trị gì — đây chính là kiểu description "viết cho model hiểu", tránh lỗi mơ hồ đã nêu trên.
+Repo `mcp-superset` là một ví dụ cụ thể của tool-calling triển khai qua MCP (chi tiết giao thức ở Phần 16). Xem [`tools/chart.py`](../../tools/chart.py) dòng 20-35, hàm `superset_chart_list`: type hint Python (`Optional[str]`, `Optional[int]`) và docstring được framework FastMCP (thư viện `mcp`) tự chuyển thành JSON Schema mà model nhìn thấy — đúng cơ chế "tool schema nhúng vào context" nói ở trên, chỉ khác chỗ sinh schema là tự động từ code thay vì viết tay JSON. Docstring dòng 29-34 giải thích rõ `name_contains` lọc thế nào, `order_column` nhận giá trị gì — đây chính là kiểu description "viết cho model hiểu", tránh lỗi mơ hồ đã nêu trên.
 
 ## Thực hành
 Cài `pip install anthropic` (dùng API key cá nhân/free tier khi tự học, không dùng key thật của SSI — xem lưu ý ở README). Ví dụ tool-calling tối giản với Anthropic SDK, có một tool "dễ gây chọn sai" để quan sát hành vi:
@@ -151,10 +151,10 @@ Chạy thử với câu hỏi mơ hồ (ví dụ "Ha Noi thế nào?") để qua
 Nhiều model (Claude, GPT từ các phiên bản gần đây) có thể trả về **nhiều tool_use block trong cùng 1 response** nếu xác định các tool call độc lập nhau (ví dụ: lấy thời tiết 3 thành phố cùng lúc). Code của bạn phải thực thi tất cả và trả về tool_result cho từng `tool_use_id` tương ứng trong đúng 1 message tiếp theo — không phải tách thành nhiều round-trip. Bỏ sót 1 `tool_result` sẽ làm request kế tiếp bị lỗi vì thiếu phản hồi cho 1 tool_use_id đã gửi.
 
 ### Forced tool choice
-Cả Anthropic và OpenAI cho phép ép model phải gọi 1 tool cụ thể (`tool_choice={"type": "tool", "name": "..."}` ở Anthropic) thay vì để model tự quyết có cần tool hay không. Dùng khi bạn chắc chắn output phải theo 1 cấu trúc cụ thể (gần với structured output ở Ngày 4) — nhưng lạm dụng sẽ làm mất khả năng model tự nhận ra "câu hỏi này không cần tool nào cả".
+Cả Anthropic và OpenAI cho phép ép model phải gọi 1 tool cụ thể (`tool_choice={"type": "tool", "name": "..."}` ở Anthropic) thay vì để model tự quyết có cần tool hay không. Dùng khi bạn chắc chắn output phải theo 1 cấu trúc cụ thể (gần với structured output ở Phần 4) — nhưng lạm dụng sẽ làm mất khả năng model tự nhận ra "câu hỏi này không cần tool nào cả".
 
 ### Chi phí token của tool schema
-Mỗi tool schema gửi trong request tốn token ở input, **mỗi lượt gọi**, kể cả khi model không dùng tool nào — vì schema nằm trong context mà model phải "đọc" để quyết định. Nhiều tool = context dài hơn = cost cao hơn + latency cao hơn ở input processing, không chỉ ảnh hưởng độ chính xác chọn tool. Đây liên hệ trực tiếp tới Ngày 24 (cost engineering) — một lý do thực dụng để không nhồi tool "phòng khi cần".
+Mỗi tool schema gửi trong request tốn token ở input, **mỗi lượt gọi**, kể cả khi model không dùng tool nào — vì schema nằm trong context mà model phải "đọc" để quyết định. Nhiều tool = context dài hơn = cost cao hơn + latency cao hơn ở input processing, không chỉ ảnh hưởng độ chính xác chọn tool. Đây liên hệ trực tiếp tới Phần 24 (cost engineering) — một lý do thực dụng để không nhồi tool "phòng khi cần".
 
 ### Vòng lặp validate trước khi thực thi
 Không bao giờ thực thi trực tiếp input mà model sinh ra nếu tool đó có side-effect thật (viết DB, gọi API ghi dữ liệu, xoá file). Luôn có một lớp validate độc lập (ví dụ Pydantic model, hoặc kiểm tra range/enum tay) giữa "model đề xuất" và "code thực thi" — vì model có thể sinh input hợp lệ theo JSON Schema nhưng vô nghĩa về business logic (ví dụ `page_size=-1`, `chart_id=0`).

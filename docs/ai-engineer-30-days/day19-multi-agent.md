@@ -1,11 +1,11 @@
-# Ngày 19 — Multi-agent: khi nào đáng, khi nào chỉ là 1 agent giả trang
+# Phần 19 — Multi-agent: khi nào đáng, khi nào chỉ là 1 agent giả trang
 
 ## Mục tiêu hôm nay
 Nắm các pattern multi-agent chính (supervisor/orchestrator-worker, hand-off, debate/critique) và rèn khả năng đánh giá phản biện — vì multi-agent là chủ đề dễ bị lạm dụng theo hype nhất trong toàn bộ kiến trúc agent, và hay bị hỏi xoáy ở review senior.
 
 ## Đọc trước
 - [Anthropic — Tool use / building agents](https://docs.anthropic.com/) — phần thảo luận về khi nào cần nhiều agent hay chỉ cần 1 agent với nhiều tool.
-- Paper "ReAct: Synergizing Reasoning and Acting in Language Models" (đã đọc Ngày 17) — đọc lại phần liên quan tới việc 1 agent đơn có thể xử lý nhiều bước, làm nền so sánh với lý do "cần" nhiều agent.
+- Paper "ReAct: Synergizing Reasoning and Acting in Language Models" (đã đọc Phần 17) — đọc lại phần liên quan tới việc 1 agent đơn có thể xử lý nhiều bước, làm nền so sánh với lý do "cần" nhiều agent.
 - LangChain — tài liệu về multi-agent orchestration (nếu có, phần khái niệm không cần chạy code) — để thấy cách 1 framework mô tả pattern supervisor/worker.
 
 ## Khái niệm cốt lõi
@@ -18,7 +18,7 @@ Multi-agent là kiến trúc trong đó **nhiều lời gọi model độc lập
 ### Pattern 1: Supervisor / Orchestrator-Worker
 Một agent "supervisor" nhận task tổng, chia nhỏ thành sub-task, giao (thường qua tool-calling — supervisor "gọi" 1 worker agent như thể nó là 1 tool) cho các "worker" agent chuyên biệt xử lý từng phần, rồi tổng hợp kết quả từ các worker để trả lời cuối. Mỗi worker thường có system prompt hẹp, chuyên 1 domain (ví dụ: 1 worker chuyên viết SQL, 1 worker chuyên tóm tắt văn bản, 1 worker chuyên gọi API bên ngoài).
 
-- **Giá trị thật**: mỗi worker chỉ cần thấy tool và context liên quan tới domain của nó — giảm nhiễu tool-selection (liên hệ Ngày 15: quá nhiều tool cùng lúc gây chọn sai) vì mỗi agent chỉ có 1 tập tool nhỏ, liên quan. Supervisor không cần biết chi tiết implementation của worker, chỉ cần biết "giao việc gì, nhận lại gì" — tách biệt rõ ràng (separation of concerns, khái niệm quen thuộc từ backend).
+- **Giá trị thật**: mỗi worker chỉ cần thấy tool và context liên quan tới domain của nó — giảm nhiễu tool-selection (liên hệ Phần 15: quá nhiều tool cùng lúc gây chọn sai) vì mỗi agent chỉ có 1 tập tool nhỏ, liên quan. Supervisor không cần biết chi tiết implementation của worker, chỉ cần biết "giao việc gì, nhận lại gì" — tách biệt rõ ràng (separation of concerns, khái niệm quen thuộc từ backend).
 - **Chi phí thật**: mỗi worker là 1 (hoặc nhiều) lời gọi model riêng — tăng số lượng API call, tăng latency tổng (thường không parallel hoá hoàn toàn được vì worker sau phụ thuộc kết quả worker trước), tăng cost theo số lời gọi.
 
 ### Pattern 2: Hand-off giữa agent chuyên biệt
@@ -30,7 +30,7 @@ Khác supervisor (1 agent trung tâm điều phối toàn bộ), hand-off là kh
 ### Pattern 3: Debate / Critique giữa nhiều agent
 Nhiều agent (thường cùng model hoặc khác model) cùng xử lý 1 vấn đề độc lập, sau đó so sánh/phản biện kết quả của nhau (1 agent đóng vai "critic" chấm/phản biện output của agent khác) trước khi chọn ra câu trả lời cuối — hoặc lặp lại vài vòng debate để hội tụ về câu trả lời tốt hơn.
 
-- **Giá trị thật**: tăng độ chính xác cho task có tính chất đánh giá/suy luận phức tạp, nơi 1 lần sinh output duy nhất dễ mắc lỗi mà chính model khó tự phát hiện lỗi của mình (self-critique trong cùng 1 lần gọi thường yếu hơn 1 lời gọi riêng đóng vai critic với context sạch). Cũng dùng trong LLM-as-judge (sẽ gặp lại ở Ngày 22 khi học eval).
+- **Giá trị thật**: tăng độ chính xác cho task có tính chất đánh giá/suy luận phức tạp, nơi 1 lần sinh output duy nhất dễ mắc lỗi mà chính model khó tự phát hiện lỗi của mình (self-critique trong cùng 1 lần gọi thường yếu hơn 1 lời gọi riêng đóng vai critic với context sạch). Cũng dùng trong LLM-as-judge (sẽ gặp lại ở Phần 22 khi học eval).
 - **Chi phí thật**: nhân số lời gọi model lên nhiều lần (N agent x M vòng debate) — chi phí và latency tăng tuyến tính hoặc hơn, chỉ hợp lý khi giá trị tăng độ chính xác lớn hơn chi phí tăng thêm, và task đủ quan trọng để trả giá đó (ví dụ eval offline chạy 1 lần, không phải mỗi request người dùng).
 
 ### Khi nào multi-agent THỰC SỰ đáng
@@ -40,8 +40,8 @@ Nhiều agent (thường cùng model hoặc khác model) cùng xử lý 1 vấn 
 
 ### Khi nào chỉ là "1 agent giả trang nhiều agent" — lạm dụng theo hype
 Đây là lỗi thiết kế rất thường gặp và là chủ đề hay bị hỏi xoáy khi review senior:
-- **Chia nhỏ theo "bước" thay vì theo "chuyên môn"**: tạo ra "agent bước 1", "agent bước 2", "agent bước 3" chỉ vì task có nhiều bước — trong khi bản chất đó chỉ là 1 vòng lặp ReAct đơn (Ngày 17) của 1 agent duy nhất, gọi tool khác nhau ở mỗi bước. Không có sự khác biệt về "chuyên môn" hay "cách ly context" thật — chỉ là chia nhỏ 1 quy trình tuần tự và gọi mỗi phần là "1 agent" để nghe hiện đại hơn.
-- **Không tăng chất lượng đo được, chỉ tăng cost/latency/độ khó debug**: nếu benchmark/eval (Ngày 22) không cho thấy multi-agent cho kết quả tốt hơn rõ rệt so với 1 agent đơn với tool tốt, thì việc thêm nhiều agent chỉ đang trả thêm chi phí (nhiều API call, nhiều điểm lỗi, log rải ở nhiều nơi khó trace — liên hệ Ngày 26 observability) mà không đổi lại gì.
+- **Chia nhỏ theo "bước" thay vì theo "chuyên môn"**: tạo ra "agent bước 1", "agent bước 2", "agent bước 3" chỉ vì task có nhiều bước — trong khi bản chất đó chỉ là 1 vòng lặp ReAct đơn (Phần 17) của 1 agent duy nhất, gọi tool khác nhau ở mỗi bước. Không có sự khác biệt về "chuyên môn" hay "cách ly context" thật — chỉ là chia nhỏ 1 quy trình tuần tự và gọi mỗi phần là "1 agent" để nghe hiện đại hơn.
+- **Không tăng chất lượng đo được, chỉ tăng cost/latency/độ khó debug**: nếu benchmark/eval (Phần 22) không cho thấy multi-agent cho kết quả tốt hơn rõ rệt so với 1 agent đơn với tool tốt, thì việc thêm nhiều agent chỉ đang trả thêm chi phí (nhiều API call, nhiều điểm lỗi, log rải ở nhiều nơi khó trace — liên hệ Phần 26 observability) mà không đổi lại gì.
 - **Debug multi-agent khó hơn hẳn 1 agent đơn**: lỗi có thể xảy ra ở supervisor, ở 1 trong N worker, hoặc ở bước tổng hợp — cần trace xuyên qua nhiều lời gọi model độc lập để tìm ra chỗ sai, so với 1 agent đơn chỉ có 1 luồng log tuyến tính. Chi phí vận hành/debug này thường bị đánh giá thấp khi thiết kế ban đầu, chỉ lộ ra khi hệ thống đã chạy production và có lỗi khó tái hiện.
 - **"Nghe cho oai" trong pitch/CV nhưng không giải quyết vấn đề thật**: multi-agent là cụm từ hot, dễ bị đưa vào thiết kế để "nghe hiện đại" — senior engineer phải phản biện được câu hỏi "nếu bỏ hết, dùng 1 agent với tool tốt hơn và prompt rõ hơn, kết quả có tệ đi không?" trước khi chốt kiến trúc multi-agent.
 
@@ -136,16 +136,16 @@ if __name__ == "__main__":
 ## Đào sâu / nâng cao
 
 ### Context isolation là giá trị kỹ thuật, không chỉ tổ chức
-Khi worker KHÔNG thấy toàn bộ lịch sử của supervisor hay worker khác, đây có giá trị thật ngoài "gọn code": giảm token phải xử lý mỗi lời gọi (worker chỉ nhận phần liên quan, không nhận toàn bộ lịch sử tích lũy), và giảm rủi ro "nhiễu" thông tin không liên quan ảnh hưởng tới output của worker (tương tự lý do giảm số tool active ở Ngày 15).
+Khi worker KHÔNG thấy toàn bộ lịch sử của supervisor hay worker khác, đây có giá trị thật ngoài "gọn code": giảm token phải xử lý mỗi lời gọi (worker chỉ nhận phần liên quan, không nhận toàn bộ lịch sử tích lũy), và giảm rủi ro "nhiễu" thông tin không liên quan ảnh hưởng tới output của worker (tương tự lý do giảm số tool active ở Phần 15).
 
 ### Đo lường trước khi quyết định tách multi-agent
-Nguyên tắc senior: không tách multi-agent dựa trên cảm giác "có vẻ nên tách" — chạy eval (Ngày 22) so sánh output của kiến trúc 1-agent và multi-agent trên cùng bộ test case, đo cả chất lượng VÀ cost/latency, rồi quyết định dựa trên số liệu. Nếu chưa có eval framework, đó là dấu hiệu chưa nên vội tách multi-agent.
+Nguyên tắc senior: không tách multi-agent dựa trên cảm giác "có vẻ nên tách" — chạy eval (Phần 22) so sánh output của kiến trúc 1-agent và multi-agent trên cùng bộ test case, đo cả chất lượng VÀ cost/latency, rồi quyết định dựa trên số liệu. Nếu chưa có eval framework, đó là dấu hiệu chưa nên vội tách multi-agent.
 
 ### Failure mode riêng của multi-agent: lỗi lan truyền
 Khi supervisor route sai (chọn worker sai domain), lỗi này không lộ ra ngay — worker vẫn trả lời "hợp lý" nhưng lệch chủ đề, và người dùng/hệ thống eval có thể không phát hiện ngay lỗi nằm ở bước routing chứ không phải ở worker. Multi-agent thêm 1 lớp lỗi mới (routing/hand-off sai) không tồn tại ở 1 agent đơn.
 
 ### Multi-agent với cùng model vs khác model
-Debate/critique có thể dùng cùng 1 model cho tất cả agent (rẻ hơn, nhưng cùng model có xu hướng có cùng điểm mù/bias), hoặc dùng model khác nhau cho từng vai trò (đắt hơn, nhưng giảm rủi ro tất cả agent cùng mắc đúng 1 loại lỗi). Cân nhắc này liên hệ trực tiếp Ngày 6 (model selection) và Ngày 24 (cost engineering).
+Debate/critique có thể dùng cùng 1 model cho tất cả agent (rẻ hơn, nhưng cùng model có xu hướng có cùng điểm mù/bias), hoặc dùng model khác nhau cho từng vai trò (đắt hơn, nhưng giảm rủi ro tất cả agent cùng mắc đúng 1 loại lỗi). Cân nhắc này liên hệ trực tiếp Phần 6 (model selection) và Phần 24 (cost engineering).
 
 ## Bài tập senior
 Trong 1 buổi review thiết kế, đồng nghiệp đề xuất kiến trúc "5 agent chuyên biệt" cho 1 chatbot hỗ trợ nội bộ đơn giản (trả lời câu hỏi về chính sách công ty, chỉ cần tra cứu 1 bộ tài liệu tĩnh) — lý do đưa ra là "để hệ thống có khả năng mở rộng và chuyên môn hoá cao". Bạn nghi ngờ đây là over-engineering vì bài toán thực chất chỉ là RAG đơn giản (Tuần 2) + có thể vài tool nhỏ. Viết ra: (1) 3-4 câu hỏi bạn sẽ hỏi để làm rõ liệu có domain nào thực sự khác biệt cần cách ly, (2) cách bạn đề xuất bắt đầu bằng 1 agent đơn và chỉ tách khi có số liệu eval chứng minh cần, (3) cách trình bày phản biện này mà không phủ nhận hoàn toàn ý tưởng của đồng nghiệp trong 1 buổi review (kỹ năng giao tiếp senior, không chỉ kỹ thuật).

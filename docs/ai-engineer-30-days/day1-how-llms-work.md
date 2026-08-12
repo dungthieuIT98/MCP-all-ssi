@@ -1,4 +1,4 @@
-# Ngày 1 — LLM sinh token thế nào
+# Phần 1 — LLM sinh token thế nào
 
 ## Mục tiêu hôm nay
 Hiểu đúng cơ chế next-token prediction để không còn nói "AI hiểu câu hỏi" một cách sai lệch — vì mọi quyết định kỹ thuật sau này (prompt engineering, structured output, guardrail, đánh giá hallucination) đều xuất phát từ việc model chỉ làm một việc: dự đoán token tiếp theo dựa trên phân phối xác suất.
@@ -16,7 +16,7 @@ Một LLM là một hàm số khổng lồ: nhận vào một chuỗi token (câ
 
 Quá trình sinh văn bản là **autoregressive**: model sinh token thứ N dựa trên (prompt + token 1..N-1) đã sinh ra trước đó, rồi nối token N vào chuỗi, đưa lại toàn bộ chuỗi vào model để sinh token N+1, lặp lại đến khi gặp token kết thúc (`stop_reason: end_turn`) hoặc chạm giới hạn `max_tokens`. Đây là lý do một câu trả lời dài luôn tốn nhiều lượt forward-pass hơn câu ngắn — không có "đường tắt" để model biết trước toàn bộ câu trả lời rồi mới in ra.
 
-Điểm quan trọng cho backend dev: **API là stateless**. Mỗi request bạn gửi đi là một lần chạy forward-pass trên toàn bộ ngữ cảnh bạn gửi (system + messages). Model không "nhớ" giữa các request — cái gọi là "hội thoại nhiều lượt" chỉ là bạn tự gửi lại toàn bộ lịch sử ở mỗi lượt gọi. Không hiểu điều này thì thiết kế cache, giới hạn context, tối ưu chi phí ở Ngày 2 sẽ sai từ gốc.
+Điểm quan trọng cho backend dev: **API là stateless**. Mỗi request bạn gửi đi là một lần chạy forward-pass trên toàn bộ ngữ cảnh bạn gửi (system + messages). Model không "nhớ" giữa các request — cái gọi là "hội thoại nhiều lượt" chỉ là bạn tự gửi lại toàn bộ lịch sử ở mỗi lượt gọi. Không hiểu điều này thì thiết kế cache, giới hạn context, tối ưu chi phí ở Phần 2 sẽ sai từ gốc.
 
 ### Sampling: temperature, top-p, top-k
 Sau khi model tính ra phân phối xác suất trên vocabulary, hệ thống phải **chọn** một token cụ thể từ phân phối đó — bước này gọi là sampling, và nó là nơi các tham số quen thuộc phát huy tác dụng:
@@ -45,7 +45,7 @@ Hallucination — model tự tin đưa ra thông tin sai — không phải lỗi
 Hệ quả kỹ thuật: **không có cách nào loại bỏ hallucination bằng prompt engineering thuần túy** — chỉ có thể giảm thiểu. Các kỹ thuật giảm thiểu thật (không phải "câu thần chú"): grounding bằng RAG/tool-calling để model trích dẫn từ nguồn thay vì generate từ trí nhớ tham số, structured output để giảm không gian tự do sinh chữ, và ở tầng ứng dụng — validate output trước khi tin dùng, không bao giờ pipe trực tiếp output model vào hành động có side-effect mà không qua kiểm tra.
 
 ## Đối chiếu với code thật trong repo
-Repo `mcp-superset` không tự chạy inference — nó là MCP server expose tool cho một AI assistant (Claude) gọi vào Superset. Nhưng cơ chế next-token prediction chi phối trực tiếp cách AI assistant quyết định gọi tool nào: khi Claude "đọc" danh sách tool đã đăng ký qua `@mcp.tool()` trong các file `tools/chart.py`, `tools/dashboard.py`, v.v., việc chọn gọi tool nào — và điền argument gì — cũng chỉ là next-token prediction trên một vocabulary đặc biệt (tên tool + JSON schema tham số). Docstring của mỗi tool (ví dụ mô tả của `superset_chart_list`) chính là văn bản duy nhất model dùng để "quyết định" — không có kênh giao tiếp nào khác giữa bạn (người viết tool) và model ngoài chuỗi ký tự đó. Ngày 3-4 sẽ đi sâu vào việc docstring này thực chất là một dạng prompt engineering.
+Repo `mcp-superset` không tự chạy inference — nó là MCP server expose tool cho một AI assistant (Claude) gọi vào Superset. Nhưng cơ chế next-token prediction chi phối trực tiếp cách AI assistant quyết định gọi tool nào: khi Claude "đọc" danh sách tool đã đăng ký qua `@mcp.tool()` trong các file `tools/chart.py`, `tools/dashboard.py`, v.v., việc chọn gọi tool nào — và điền argument gì — cũng chỉ là next-token prediction trên một vocabulary đặc biệt (tên tool + JSON schema tham số). Docstring của mỗi tool (ví dụ mô tả của `superset_chart_list`) chính là văn bản duy nhất model dùng để "quyết định" — không có kênh giao tiếp nào khác giữa bạn (người viết tool) và model ngoài chuỗi ký tự đó. Phần 3-4 sẽ đi sâu vào việc docstring này thực chất là một dạng prompt engineering.
 
 ## Thực hành
 Cài SDK và quan sát trực tiếp hiệu ứng của effort/thinking lên cách model sinh token — không cần tài khoản trả phí lớn, một vài request là đủ để thấy sự khác biệt.
@@ -93,9 +93,9 @@ with client.messages.stream(
 ```
 
 ## Bài tập tự làm
-1. Chạy lại đoạn code "đặt tên quán cà phê" 5 lần, ghi lại 5 kết quả. Thử giải thích bằng ngôn ngữ của Ngày 1 (không dùng từ "sáng tạo" hay "hiểu") vì sao 5 kết quả có thể khác nhau.
+1. Chạy lại đoạn code "đặt tên quán cà phê" 5 lần, ghi lại 5 kết quả. Thử giải thích bằng ngôn ngữ của Phần 1 (không dùng từ "sáng tạo" hay "hiểu") vì sao 5 kết quả có thể khác nhau.
 2. Đặt một câu hỏi về một sự kiện/API bạn biết chắc xảy ra sau ngày cắt dữ liệu huấn luyện của model (tra ngày cắt dữ liệu chính thức trong tài liệu Anthropic mới nhất). Quan sát model trả lời thế nào — nó có báo "tôi không biết" hay tự tin bịa ra thông tin? Viết lại bằng ngôn ngữ kỹ thuật vì sao điều đó xảy ra (liên hệ mục "ngoài phạm vi kiến thức huấn luyện" ở trên).
-3. Dùng streaming để in ra một câu trả lời dài (~300 token). Đo thời gian giữa lúc gọi API và lúc token đầu tiên xuất hiện (time-to-first-token) so với thời gian từ token đầu tới token cuối — hai khoảng thời gian này phản ánh hai giai đoạn khác nhau của inference (prefill vs decode), sẽ dùng lại ở Ngày 2 khi nói về latency.
+3. Dùng streaming để in ra một câu trả lời dài (~300 token). Đo thời gian giữa lúc gọi API và lúc token đầu tiên xuất hiện (time-to-first-token) so với thời gian từ token đầu tới token cuối — hai khoảng thời gian này phản ánh hai giai đoạn khác nhau của inference (prefill vs decode), sẽ dùng lại ở Phần 2 khi nói về latency.
 
 ## Đào sâu / nâng cao
 
@@ -104,7 +104,7 @@ Một lần gọi API thực chất chạy qua 2 giai đoạn có đặc tính h
 - **Prefill**: xử lý toàn bộ input (system + toàn bộ messages) trong một lần forward-pass song song — đây là lý do input dài không làm tăng latency theo cấp số nhân, chỉ tăng gần như tuyến tính và có thể tận dụng tối đa phần cứng song song.
 - **Decode**: sinh output token-by-token, mỗi token là một forward-pass **tuần tự** riêng (không song song hoá được vì token N+1 cần token N làm input). Đây là lý do output dài luôn chậm hơn tuyến tính so với input dài tương đương, và là lý do các tính năng như "Fast Mode" (tăng tốc decode) tồn tại như một tính năng riêng biệt với việc giảm input.
 
-Hiểu 2 giai đoạn này giải thích trực tiếp vì sao ở Ngày 2, chi phí và độ trễ của input token và output token được tính khác nhau và giá khác nhau (output luôn đắt hơn input, thường gấp 4-5 lần).
+Hiểu 2 giai đoạn này giải thích trực tiếp vì sao ở Phần 2, chi phí và độ trễ của input token và output token được tính khác nhau và giá khác nhau (output luôn đắt hơn input, thường gấp 4-5 lần).
 
 ### Extended thinking / adaptive thinking không phải "một bộ não khác"
 Các model Claude hiện đại có "thinking block" — nhìn giống như model "suy nghĩ" trước khi trả lời. Về cơ chế, đây **vẫn là next-token prediction**, chỉ khác là model được huấn luyện để sinh ra một chuỗi token trung gian (reasoning trace) trước khi sinh token của câu trả lời cuối, và chuỗi trung gian đó có thể cải thiện chất lượng câu trả lời cuối cùng — giống việc con người viết nháp trước khi viết bản chính. Adaptive thinking (`thinking: {"type": "adaptive"}`) để model tự quyết định độ dài chuỗi trung gian này dựa trên độ khó cảm nhận của câu hỏi, thay vì cấu hình cứng bằng `budget_tokens` (cách cũ, đã loại bỏ trên các model mới). Xem [Extended thinking overview](https://docs.anthropic.com/en/docs/build-with-claude/extended-thinking) để hiểu cách chuỗi thinking này được tính token và tính phí — vẫn tính vào output token dù không phải câu trả lời cuối.
@@ -114,12 +114,32 @@ Không có tín hiệu nội tại đáng tin cậy nào trong quá trình sinh 
 
 ## Bài tập senior
 1. Một đồng nghiệp junior đề xuất: "Set `temperature=0` cho toàn bộ pipeline production để đảm bảo output luôn giống nhau, dễ test và cache." Hãy chỉ ra 2 vấn đề với đề xuất này — một vấn đề về API hiện đại của Claude, một vấn đề về giả định "temperature=0 = deterministic" nói chung.
+
+=> kq có thể khác nhau vì hệ thống gộp nhiều input để tính toán
+=> khác nhau vì gpu tính toán ra kq song song, cộng trong đó sẽ k đúng.
+
+
 2. Thiết kế (ở mức mô tả, không cần code) một cơ chế phát hiện khả năng hallucination ở tầng ứng dụng cho một chatbot hỏi-đáp dựa trên tài liệu nội bộ công ty (không dùng RAG — model trả lời từ kiến thức tham số). Bạn sẽ dựa vào tín hiệu nào để gắn cờ "câu trả lời này có rủi ro cao là bịa", biết rằng bạn không có quyền truy cập vào logit/xác suất nội bộ của model qua API thông thường?
 3. Review đoạn mô tả sau trong một tài liệu kỹ thuật nội bộ giả định: *"Model của chúng ta hiểu ngữ cảnh nghiệp vụ chứng khoán rất tốt nên có thể tự đưa ra khuyến nghị mua/bán mà không cần review."* Chỉ ra chỗ sai về mặt kỹ thuật trong câu này (liên hệ khái niệm "hiểu" ở mục Khái niệm cốt lõi), và giải thích vì sao — kể cả khi bỏ qua yếu tố tuân thủ pháp lý — đây là rủi ro kỹ thuật thực sự chứ không chỉ là vấn đề diễn đạt.
 
 ## Checklist trước khi qua Ngày kế
 - [ ] Giải thích được autoregressive generation bằng lời của mình, không copy định nghĩa.
+=> là cách model tự sinh ra các token tếp theo từ trái qua phải dựa trên input gốc và khot ài liệu .
+
 - [ ] Biết vì sao "AI hiểu câu hỏi" là cách nói không chính xác về mặt kỹ thuật, và có thể diễn đạt lại đúng hơn.
+=> AI k hieru câu hỏi , chỉ là dữ liệu training model đung với câu hỏi thôi .
+
 - [ ] Phân biệt được vai trò của temperature/top-p/top-k, biết model Claude thế hệ mới không nhận các tham số này.
+
 - [ ] Nêu được ít nhất 3 nguồn gốc kỹ thuật của hallucination, không chỉ nói "AI đôi khi sai".
+
+=> template : điều chỉnh độ phảng phân phối trc khi chọn token
+=> top k: top các toekn có tỉ lệ trùng cao 
+=> top k: top các token có tỉ lệ thấp nhưng tổng > 0.99????
+nói chug k hiểu lắm.
+
+
 - [ ] Chạy được ví dụ streaming và hiểu vì sao token xuất hiện tuần tự chứ không phải cùng lúc.
+=> straming là cơ chế trả ra token khi nó hoàn thành , giúp user có thể nhận được câu trả lời ngay khi hệ thống xử lý. token tuần tự vì nó còn đợi các token trước.
+vậy nên streaminh để như thật thôi.
+

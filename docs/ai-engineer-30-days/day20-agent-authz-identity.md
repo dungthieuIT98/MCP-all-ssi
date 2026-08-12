@@ -1,4 +1,4 @@
-# Ngày 20 — Authorization & identity cho agent: nguyên lý chung, đối chiếu qua session cookie forwarding trong repo
+# Phần 20 — Authorization & identity cho agent: nguyên lý chung, đối chiếu qua session cookie forwarding trong repo
 
 ## Mục tiêu hôm nay
 Hiểu nguyên lý chung về việc agent "hành động thay ai" và vì sao service account chung là anti-pattern nguy hiểm — sau đó soi kỹ 1 ví dụ thật trong `mcp-superset` triển khai đúng nguyên tắc identity pass-through thay vì impersonation.
@@ -6,7 +6,7 @@ Hiểu nguyên lý chung về việc agent "hành động thay ai" và vì sao s
 ## Đọc trước
 - [Anthropic — Tool use](https://docs.anthropic.com/) — phần liên quan tới thiết kế tool an toàn (nếu tài liệu có đề cập authorization/permission cho tool).
 - [Model Context Protocol — tài liệu chính thức](https://modelcontextprotocol.io/) — phần về authorization trong MCP (giao thức MCP có đặc tả riêng về auth qua transport HTTP).
-- OWASP — tài liệu về LLM Top 10 (sẽ học chi tiết ở Ngày 27, nhưng phần liên quan "excessive agency"/"insecure plugin design" liên quan trực tiếp chủ đề hôm nay, đọc trước phần tổng quan nếu có thời gian).
+- OWASP — tài liệu về LLM Top 10 (sẽ học chi tiết ở Phần 27, nhưng phần liên quan "excessive agency"/"insecure plugin design" liên quan trực tiếp chủ đề hôm nay, đọc trước phần tổng quan nếu có thời gian).
 
 ## Khái niệm cốt lõi
 
@@ -29,7 +29,7 @@ Service account chung (mô hình 1) có vẻ đơn giản khi implement — ch�
 ### Nguyên tắc least privilege áp cho tool của agent
 - Mỗi tool nên chỉ có quyền tối thiểu cần để thực hiện đúng chức năng mô tả — tool "đọc danh sách chart" không cần quyền "xoá chart" dù về mặt code có thể dùng chung 1 client/credential.
 - Quyền của agent (dù mô hình nào) không nên **tự vượt quyền của bất kỳ ai đứng sau nó** — nếu mượn quyền người dùng (pass-through), giới hạn tự nhiên là quyền của người dùng đó; nếu buộc phải có credential riêng (một số tool hệ thống không hỗ trợ pass-through), credential đó phải bị giới hạn chặt tới mức tối thiểu, tách theo từng tool/chức năng, không dùng 1 credential "toàn quyền" cho tất cả tool.
-- Với tool có side-effect (viết, xoá, gửi) nên có thêm lớp xác nhận/giới hạn riêng (rate limit, giới hạn phạm vi, hoặc bắt buộc human-in-the-loop — liên hệ Ngày 17) so với tool chỉ đọc.
+- Với tool có side-effect (viết, xoá, gửi) nên có thêm lớp xác nhận/giới hạn riêng (rate limit, giới hạn phạm vi, hoặc bắt buộc human-in-the-loop — liên hệ Phần 17) so với tool chỉ đọc.
 
 ### Audit log hành động của agent
 Audit log cho agent phải trả lời được tối thiểu 3 câu hỏi cho MỌI lần gọi tool có side-effect (và lý tưởng là cả tool chỉ đọc nếu dữ liệu nhạy cảm): **ai** (identity người dùng thật đứng sau, không phải "agent" chung), **cái gì** (tên tool + input cụ thể đã gọi), **kết quả gì** (thành công/thất bại, có thay đổi dữ liệu gì). Nếu hệ thống dùng identity pass-through đúng cách, phần lớn câu hỏi "ai" được trả lời tự động bởi chính audit log sẵn có ở hệ thống đích (vì request đã mang danh tính thật) — không cần xây audit log riêng cho tầng agent để bù cho việc mất thông tin identity.
@@ -114,7 +114,7 @@ Khi MCP server chạy qua HTTP (không phải stdio cùng máy), giao thức MCP
 Không phải mọi hệ thống đích đều có cơ chế nhận session/token của end-user (một số API cũ chỉ hỗ trợ 1 API key tĩnh). Khi buộc phải dùng credential chung trong trường hợp này, biện pháp giảm rủi ro: giới hạn credential đó ở mức tối thiểu tuyệt đối (chỉ đúng những endpoint/scope cần), tách credential riêng theo từng nhóm chức năng thay vì 1 credential toàn quyền, và bù đắp bằng audit log tường minh ở tầng agent (vì hệ thống đích sẽ không tự ghi được identity thật).
 
 ### Prompt injection và "excessive agency"
-Chủ đề này sẽ học sâu ở Ngày 27 (OWASP LLM Top 10), nhưng cần nối lại ngay từ đây: "excessive agency" là khi agent được cấp quyền thực thi vượt quá mức cần cho tác vụ chính đáng của nó. Identity pass-through không "chống" được prompt injection tự thân (agent vẫn có thể bị dụ *thử* gọi tool sai) — giá trị thật là nó **giới hạn hậu quả tối đa** của 1 lần bị dụ thành công, xuống đúng bằng quyền của người dùng thật, không hơn.
+Chủ đề này sẽ học sâu ở Phần 27 (OWASP LLM Top 10), nhưng cần nối lại ngay từ đây: "excessive agency" là khi agent được cấp quyền thực thi vượt quá mức cần cho tác vụ chính đáng của nó. Identity pass-through không "chống" được prompt injection tự thân (agent vẫn có thể bị dụ *thử* gọi tool sai) — giá trị thật là nó **giới hạn hậu quả tối đa** của 1 lần bị dụ thành công, xuống đúng bằng quyền của người dùng thật, không hơn.
 
 ### Đa nhiệm: 1 agent phục vụ nhiều người dùng đồng thời
 Trong hệ thống thật, 1 server (như `mcp-superset`) phục vụ nhiều người dùng đồng thời — comment ở `get_csrf_token` (dòng 71-72 trong `utils/http.py`) chỉ ra 1 chi tiết dễ bị bỏ sót: *"the SupersetContext is a single shared instance across all callers, so caching it there would leak one caller's token to another under concurrent use"* — tức là bất kỳ state có thể cache/lưu tạm ở tầng server dùng chung cho nhiều request đều là điểm rủi ro leak identity giữa người dùng khác nhau nếu không cẩn thận, kể cả khi đã làm đúng pass-through ở tầng logic chính.

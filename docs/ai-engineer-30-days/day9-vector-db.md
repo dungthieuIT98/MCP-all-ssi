@@ -1,4 +1,4 @@
-# Ngày 9 — Vector database, index ANN, khi nào cần và khi nào không
+# Phần 9 — Vector database, index ANN, khi nào cần và khi nào không
 
 ## Mục tiêu hôm nay
 Hiểu vector database giải quyết vấn đề gì về mặt kỹ thuật (index ANN, không phải "database thần kỳ cho AI"), và — quan trọng hơn với dev backend — biết phân biệt lúc nào việc thêm một vector DB riêng là kỹ thuật đúng đắn và lúc nào chỉ là FOMO (thấy công ty khác dùng Pinecone/Qdrant nên mình cũng phải dùng).
@@ -14,7 +14,7 @@ Hiểu vector database giải quyết vấn đề gì về mặt kỹ thuật (i
 ### Vấn đề mà vector DB giải quyết: tìm kiếm gần đúng ở quy mô lớn
 So sánh similarity giữa 1 vector query và N vector đã lưu, theo cách "brute-force" (tính cosine similarity với từng vector một, sort) là `O(N)` mỗi lần query — với N vài nghìn thì máy tính thường vẫn đủ nhanh, nhưng với N hàng triệu/hàng tỷ, brute-force trở nên quá chậm cho một API cần trả lời trong vài trăm ms. Vector DB (hoặc extension như pgvector) giải quyết vấn đề này bằng cách xây **index xấp xỉ (Approximate Nearest Neighbor — ANN)**: đánh đổi một chút độ chính xác (có thể miss vài kết quả gần nhất tuyệt đối) để đổi lấy tốc độ truy vấn gần như hằng số hoặc logarit theo N, thay vì tuyến tính.
 
-Đây là điểm mà dev backend cần nắm chắc: vector DB **không phải** một loại database mới có phép thuật hiểu ngữ nghĩa — nó vẫn chỉ là một cấu trúc lưu trữ + index chuyên cho phép toán similarity trên vector nhiều chiều. Phần "hiểu ngữ nghĩa" hoàn toàn nằm ở embedding model (Ngày 8), vector DB chỉ lưu trữ và tìm kiếm hiệu quả trên output của model đó.
+Đây là điểm mà dev backend cần nắm chắc: vector DB **không phải** một loại database mới có phép thuật hiểu ngữ nghĩa — nó vẫn chỉ là một cấu trúc lưu trữ + index chuyên cho phép toán similarity trên vector nhiều chiều. Phần "hiểu ngữ nghĩa" hoàn toàn nằm ở embedding model (Phần 8), vector DB chỉ lưu trữ và tìm kiếm hiệu quả trên output của model đó.
 
 ### Index ANN — hiểu khái niệm, không cần tự implement
 Hai họ thuật toán ANN phổ biến nhất, ở mức hiểu khái niệm để đọc thông số config, không cần implement:
@@ -103,7 +103,7 @@ results = client.query_points(
 ```
 
 ## Bài tập tự làm
-1. Cài pgvector local (Docker image có sẵn pgvector, hoặc build extension theo README chính thức), tạo bảng như ví dụ trên, insert 10 dòng với vector giả (random hoặc lấy từ Ngày 8), chạy truy vấn top-k và giải thích kết quả.
+1. Cài pgvector local (Docker image có sẵn pgvector, hoặc build extension theo README chính thức), tạo bảng như ví dụ trên, insert 10 dòng với vector giả (random hoặc lấy từ Phần 8), chạy truy vấn top-k và giải thích kết quả.
 2. Đọc tài liệu pgvector về `hnsw` index — tìm tham số `m` và `ef_construction` (build-time), `ef_search` (query-time), giải thích bằng lời của mình tác động của việc tăng/giảm mỗi tham số tới recall/latency/RAM.
 3. Viết ra (không cần code) một bảng so sánh 3 cột: "quy mô dữ liệu", "pgvector đủ dùng", "cần vector DB riêng" — điền dựa trên phần lý thuyết ở trên, không chép nguyên văn.
 
@@ -121,7 +121,7 @@ Ngoài chi phí license/usage, một service mới kéo theo: giám sát riêng 
 ## Bài tập senior
 Một team trong SSI đề xuất triển khai Pinecone (managed, trả phí theo usage) cho một hệ RAG nội bộ phục vụ khoảng 50 nhân viên tra cứu quy trình/chính sách (ước tính vài nghìn tài liệu, vài chục nghìn chunk). Hệ thống hiện tại đã có một Postgres instance đang chạy cho ứng dụng nội bộ khác, có dư tài nguyên. Viết một bản đánh giá ngắn (dạng bullet) cho buổi review kiến trúc, trả lời: (a) ở quy mô này, Pinecone có thực sự cần thiết so với thêm `pgvector` vào Postgres đã có; (b) nếu chọn Pinecone, dữ liệu (có thể chứa nội dung nội bộ/giới hạn theo phân loại SSI) đi qua hạ tầng bên thứ 3 — rủi ro nào cần AIGC/security review trước khi triển khai; (c) nếu chọn pgvector, điểm nghẽn nào có thể xuất hiện khi hệ thống scale lên 10x, và cần đo gì để biết trước khi nó xảy ra.
 
-## Checklist trước khi qua Ngày 10
+## Checklist trước khi qua Phần 10
 - [ ] Giải thích được vector DB giải quyết vấn đề gì (ANN ở quy mô lớn), không mô tả nó như "database AI thần kỳ".
 - [ ] Phân biệt được khái niệm HNSW và IVF ở mức đủ đọc config, không cần tự viết thuật toán.
 - [ ] Có thể lập luận rõ khi nào pgvector đủ dùng, khi nào cần vector DB riêng — có ví dụ cụ thể, không chỉ cảm tính.

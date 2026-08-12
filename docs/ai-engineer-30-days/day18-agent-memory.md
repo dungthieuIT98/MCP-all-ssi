@@ -1,4 +1,4 @@
-# Ngày 18 — Memory cho agent: ngắn hạn, dài hạn, và khi nào không cần memory
+# Phần 18 — Memory cho agent: ngắn hạn, dài hạn, và khi nào không cần memory
 
 ## Mục tiêu hôm nay
 Phân biệt short-term memory (context window) và long-term memory (lưu trữ ngoài, qua session), và rèn thói quen senior quan trọng nhất của ngày này: **biết khi nào KHÔNG cần xây long-term memory** — vì đây là chỗ dev dễ bị FOMO thêm hệ thống phức tạp không cần thiết.
@@ -6,14 +6,14 @@ Phân biệt short-term memory (context window) và long-term memory (lưu trữ
 ## Đọc trước
 - [Anthropic — Context windows](https://docs.anthropic.com/) — phần giải thích context window và giới hạn token.
 - [OpenAI — Function calling / context](https://platform.openai.com/docs/) — phần liên quan tới quản lý lịch sử hội thoại nhiều lượt.
-- Tài liệu vector database bạn đã học ở Ngày 9 (`day9-vector-db.md` trong repo này) — memory dài hạn dạng semantic search dùng lại đúng khái niệm đó, không phải kỹ thuật mới.
+- Tài liệu vector database bạn đã học ở Phần 9 (`day9-vector-db.md` trong repo này) — memory dài hạn dạng semantic search dùng lại đúng khái niệm đó, không phải kỹ thuật mới.
 
 ## Khái niệm cốt lõi
 
 ### Short-term memory = context window, không có gì bí ẩn hơn
 "Short-term memory" của agent, trong 1 conversation, **chính là** nội dung đang nằm trong context window gửi lên model ở mỗi lượt gọi — toàn bộ lịch sử message (user, assistant, tool_use, tool_result) tích lũy từ đầu conversation tới hiện tại. Không có "bộ nhớ" nào khác tồn tại giữa các lượt gọi model — model là stateless, mỗi API call độc lập hoàn toàn, chỉ "nhớ" được gì nằm trong chính request đó.
 
-Hệ quả trực tiếp: conversation dài dần sẽ khiến context window đầy dần, kéo theo 2 vấn đề đã học ở Ngày 2 (context window, token cost) — chi phí tăng theo token gửi lên mỗi lượt (kể cả phần lịch sử cũ không đổi vẫn tính tiền lại mỗi lần, trừ khi dùng prompt caching), và chất lượng có thể giảm khi context quá dài (hiện tượng model "bỏ sót" chi tiết ở giữa context dài — "lost in the middle"). Đây là lý do nhiều hệ thống agent phải **quản lý chủ động** short-term memory: cắt bớt lịch sử cũ, tóm tắt (summarize) các đoạn hội thoại đã qua, hoặc chỉ giữ lại N lượt gần nhất + 1 bản tóm tắt của phần cũ hơn.
+Hệ quả trực tiếp: conversation dài dần sẽ khiến context window đầy dần, kéo theo 2 vấn đề đã học ở Phần 2 (context window, token cost) — chi phí tăng theo token gửi lên mỗi lượt (kể cả phần lịch sử cũ không đổi vẫn tính tiền lại mỗi lần, trừ khi dùng prompt caching), và chất lượng có thể giảm khi context quá dài (hiện tượng model "bỏ sót" chi tiết ở giữa context dài — "lost in the middle"). Đây là lý do nhiều hệ thống agent phải **quản lý chủ động** short-term memory: cắt bớt lịch sử cũ, tóm tắt (summarize) các đoạn hội thoại đã qua, hoặc chỉ giữ lại N lượt gần nhất + 1 bản tóm tắt của phần cũ hơn.
 
 ### Long-term memory = lưu trữ ngoài context, tồn tại qua nhiều session
 Long-term memory là khi thông tin cần "nhớ" **vượt quá** 1 lần conversation — ví dụ: agent hỗ trợ khách hàng cần nhớ lịch sử tương tác của khách đó từ lần trước (session khác, ngày khác), hoặc agent trợ lý cá nhân cần nhớ sở thích người dùng đã nói cách đây 2 tuần. Về kỹ thuật, long-term memory luôn cần 1 lớp lưu trữ ngoài (database, vector store, file) và 1 bước **retrieval** để lấy lại đúng phần thông tin liên quan, chèn vào context window của session hiện tại trước khi gọi model — bản chất là biến "memory" thành 1 dạng RAG (đã học Tuần 2): query hiện tại → tìm thông tin liên quan trong storage → nhúng vào prompt.
@@ -129,13 +129,13 @@ Chạy và quan sát: `run_session` không có bất kỳ lịch sử chat cũ n
 ## Đào sâu / nâng cao
 
 ### Prompt caching và short-term memory
-Nhiều provider (bao gồm Anthropic) hỗ trợ prompt caching — phần đầu context (system prompt, tool schema, phần lịch sử ổn định) có thể được cache ở phía provider để giảm chi phí/latency cho các lượt gọi tiếp theo trong cùng conversation, thay vì phải tính lại toàn bộ. Đây là tối ưu ở tầng short-term memory, không phải long-term — liên hệ trực tiếp Ngày 24 (cost engineering).
+Nhiều provider (bao gồm Anthropic) hỗ trợ prompt caching — phần đầu context (system prompt, tool schema, phần lịch sử ổn định) có thể được cache ở phía provider để giảm chi phí/latency cho các lượt gọi tiếp theo trong cùng conversation, thay vì phải tính lại toàn bộ. Đây là tối ưu ở tầng short-term memory, không phải long-term — liên hệ trực tiếp Phần 24 (cost engineering).
 
 ### Memory "consolidation" — rủi ro hay bị bỏ qua
 Khi hệ thống liên tục ghi fact mới vào long-term store (ví dụ mỗi session lại tự động "học" thêm điều gì về người dùng), cần cơ chế xử lý fact mâu thuẫn/lỗi thời (ví dụ khách đổi `plan_tier` nhưng fact cũ không bị xoá, agent sau đó trả lời dựa trên fact sai). Đây là bài toán "cập nhật/consolidate" thường bị bỏ qua khi thiết kế memory system — không chỉ là "ghi thêm", mà phải có chiến lược ghi đè/hết hạn.
 
 ### Ranh giới giữa "memory" và "RAG trên dữ liệu do chính agent tạo ra"
-Nhiều hệ thống gọi là "agent memory" thực chất là RAG (Tuần 2) áp trên 1 tập dữ liệu đặc biệt: lịch sử hội thoại/hành động do chính agent đó tạo ra trước đây, thay vì tài liệu tĩnh bên ngoài. Về kỹ thuật retrieval (embedding, chunking, similarity search) không khác gì RAG thông thường — chunking chiến lược sai (Ngày 10) gây lỗi retrieval giống hệt cách nó gây lỗi RAG tài liệu.
+Nhiều hệ thống gọi là "agent memory" thực chất là RAG (Tuần 2) áp trên 1 tập dữ liệu đặc biệt: lịch sử hội thoại/hành động do chính agent đó tạo ra trước đây, thay vì tài liệu tĩnh bên ngoài. Về kỹ thuật retrieval (embedding, chunking, similarity search) không khác gì RAG thông thường — chunking chiến lược sai (Phần 10) gây lỗi retrieval giống hệt cách nó gây lỗi RAG tài liệu.
 
 ### Memory theo scope: user, session, hay global
 Khi thiết kế long-term memory, phải quyết định rõ fact thuộc scope nào — riêng 1 user, riêng 1 session cụ thể của user đó, hay dùng chung toàn hệ thống (ví dụ fact nghiệp vụ không đổi theo user). Nhầm scope là lỗi thiết kế phổ biến: lưu fact lẽ ra thuộc `user_id` cụ thể vào 1 store chung khiến agent trả lời dựa trên fact của người khác.

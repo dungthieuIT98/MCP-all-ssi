@@ -1,4 +1,4 @@
-# Ngày 16 — Các giao thức & framework kết nối tool: function calling thuần, MCP, OpenAPI-to-tool, LangChain/LlamaIndex — so sánh khi nào dùng gì
+# Phần 16 — Các giao thức & framework kết nối tool: function calling thuần, MCP, OpenAPI-to-tool, LangChain/LlamaIndex — so sánh khi nào dùng gì
 
 ## Mục tiêu hôm nay
 Có bức tranh toàn cảnh về các cách "gắn tool" cho LLM/agent hiện có, hiểu chúng giải quyết những vấn đề KHÁC NHAU (không phải 4 cách làm cùng 1 việc), và biết chọn đúng cho từng bài toán — không mặc định dùng framework hay MCP chỉ vì "nghe nói nó hiện đại".
@@ -11,10 +11,10 @@ Có bức tranh toàn cảnh về các cách "gắn tool" cho LLM/agent hiện c
 
 ## Khái niệm cốt lõi
 
-Ngày 15 đã thống nhất: tool-calling là cơ chế model sinh cấu trúc gọi hàm, code thực thi. Câu hỏi ngày này khác: **tool schema đó lấy từ đâu, và ai định nghĩa/quản lý vòng đời của nó?** Có 4 cách phổ biến, mỗi cách nhằm giải quyết một vấn đề khác:
+Phần 15 đã thống nhất: tool-calling là cơ chế model sinh cấu trúc gọi hàm, code thực thi. Câu hỏi ngày này khác: **tool schema đó lấy từ đâu, và ai định nghĩa/quản lý vòng đời của nó?** Có 4 cách phổ biến, mỗi cách nhằm giải quyết một vấn đề khác:
 
 ### 1. Function calling thuần (raw / no framework)
-Định nghĩa tool schema (JSON Schema) trực tiếp trong code gọi API — như ví dụ Ngày 15. Không có lớp trừu tượng nào giữa code của bạn và API của provider.
+Định nghĩa tool schema (JSON Schema) trực tiếp trong code gọi API — như ví dụ Phần 15. Không có lớp trừu tượng nào giữa code của bạn và API của provider.
 
 - **Ưu điểm**: đơn giản nhất để hiểu và debug — không có "hộp đen" nào giữa bạn và request/response thật. Không thêm dependency. Kiểm soát 100% việc parse, validate, retry.
 - **Nhược điểm**: khi số lượng tool tăng, bạn tự viết tay toàn bộ logic loop, quản lý lịch sử hội thoại, xử lý parallel tool call, retry khi lỗi — những thứ framework đóng gói sẵn.
@@ -32,7 +32,7 @@ MCP là chuẩn mở do Anthropic khởi xướng, **giải quyết một vấn 
 
 Ví tương đương hữu ích: MCP với AI tool giống như **LSP (Language Server Protocol)** với IDE. Trước LSP, mỗi IDE phải tự viết tích hợp riêng cho mỗi ngôn ngữ (VSCode viết 1 bộ hiểu Python, Sublime viết 1 bộ khác). LSP chuẩn hoá giao thức, để 1 language server viết 1 lần dùng được bởi bất kỳ editor nào hỗ trợ LSP. MCP làm điều tương tự cho tool/context của AI: viết 1 MCP server, dùng được bởi bất kỳ AI client nào hỗ trợ MCP, không phải viết lại integration riêng cho từng app AI.
 
-**Điểm quan trọng nhất cần nhớ: MCP không thay thế tool-calling.** Bên dưới, khi Claude (hoặc client khác) gọi 1 tool qua MCP, cơ chế model-sinh-tool-call ở Ngày 15 vẫn nguyên vẹn — MCP chỉ chuẩn hoá lớp **discover tool nào đang có** (server công bố danh sách tool + schema qua giao thức) và **cách gọi tool đó qua transport** (client gửi request MCP, server trả kết quả) giữa 2 process độc lập. Nói cách khác, MCP là 1 lớp giao thức nằm TRÊN tool-calling, không phải một cơ chế cạnh tranh với nó.
+**Điểm quan trọng nhất cần nhớ: MCP không thay thế tool-calling.** Bên dưới, khi Claude (hoặc client khác) gọi 1 tool qua MCP, cơ chế model-sinh-tool-call ở Phần 15 vẫn nguyên vẹn — MCP chỉ chuẩn hoá lớp **discover tool nào đang có** (server công bố danh sách tool + schema qua giao thức) và **cách gọi tool đó qua transport** (client gửi request MCP, server trả kết quả) giữa 2 process độc lập. Nói cách khác, MCP là 1 lớp giao thức nằm TRÊN tool-calling, không phải một cơ chế cạnh tranh với nó.
 
 - **Ưu điểm**: tách biệt server (nơi implement tool, cần domain knowledge — ví dụ ai đó ở team Superset) khỏi client (nơi chạy agent/LLM) — server viết 1 lần, nhiều team/nhiều app dùng lại được. Chuẩn hoá auth, discovery, transport.
 - **Nhược điểm**: thêm 1 process, 1 giao thức, 1 khái niệm mới phải học (server lifecycle, transport, session) — với 1 tool đơn giản dùng nội bộ 1 lần, đây là chi phí không cần thiết.
@@ -42,7 +42,7 @@ Ví tương đương hữu ích: MCP với AI tool giống như **LSP (Language 
 Nếu đã có REST API với OpenAPI/Swagger spec, có thể tự sinh tool schema từ spec đó (nhiều thư viện và cả một số framework ở mục 2 hỗ trợ import trực tiếp OpenAPI spec thành tool definition) — không cần viết tay JSON Schema cho từng endpoint.
 
 - **Ưu điểm**: nhanh nếu đã có API hoàn chỉnh — tận dụng lại spec đã có, không cần định nghĩa 2 lần.
-- **Nhược điểm**: chất lượng tool description hoàn toàn phụ thuộc chất lượng OpenAPI spec gốc. Spec REST thường viết cho developer đọc (ngắn, kỹ thuật) — không được viết với tiêu chí "đủ rõ để LLM chọn đúng tool" như đã nói ở Ngày 15 (không phân biệt use-case, không có ví dụ, description generic kiểu "Get resource by ID"). Sinh tool tự động từ spec kém sẽ tạo ra tool chất lượng kém, và endpoint REST design tốt cho human/service-to-service chưa chắc là tool design tốt cho LLM (ví dụ REST có xu hướng chia nhỏ endpoint theo resource, nhưng LLM có thể cần 1 tool tổng hợp nhiều bước để giảm số lần gọi).
+- **Nhược điểm**: chất lượng tool description hoàn toàn phụ thuộc chất lượng OpenAPI spec gốc. Spec REST thường viết cho developer đọc (ngắn, kỹ thuật) — không được viết với tiêu chí "đủ rõ để LLM chọn đúng tool" như đã nói ở Phần 15 (không phân biệt use-case, không có ví dụ, description generic kiểu "Get resource by ID"). Sinh tool tự động từ spec kém sẽ tạo ra tool chất lượng kém, và endpoint REST design tốt cho human/service-to-service chưa chắc là tool design tốt cho LLM (ví dụ REST có xu hướng chia nhỏ endpoint theo resource, nhưng LLM có thể cần 1 tool tổng hợp nhiều bước để giảm số lần gọi).
 - **Dùng khi**: đã có REST API nội bộ chất lượng tốt, cần expose nhanh cho agent, và sẵn sàng review/viết lại description sau khi sinh tự động — không nên dùng thẳng kết quả sinh tự động mà không kiểm tra.
 
 ### Bảng so sánh nhanh
@@ -130,11 +130,11 @@ if __name__ == "__main__":
         call_openai(question)
 ```
 
-Quan sát: cấu trúc JSON Schema mô tả tham số (`type`, `properties`, `required`) giống nhau ở cả hai — khác nhau chủ yếu ở tên field bọc ngoài (`input_schema` vs `function.parameters`) và cách response trả về (`content` blocks vs `tool_calls` list). Đây chính là minh chứng "tool-calling là cơ chế chung" đã nói ở Ngày 15.
+Quan sát: cấu trúc JSON Schema mô tả tham số (`type`, `properties`, `required`) giống nhau ở cả hai — khác nhau chủ yếu ở tên field bọc ngoài (`input_schema` vs `function.parameters`) và cách response trả về (`content` blocks vs `tool_calls` list). Đây chính là minh chứng "tool-calling là cơ chế chung" đã nói ở Phần 15.
 
 ## Bài tập tự làm
 1. Tự liệt kê 1 bài toán thật bạn từng gặp ở công ty (ví dụ: tool tra cứu thông tin nhân sự, tool tạo báo cáo). Với bài toán đó, viết ra lý do cụ thể chọn 1 trong 4 cách ở trên — không chọn MCP mặc định, phải giải thích được vì sao KHÔNG chọn 3 cách còn lại.
-2. Tìm 1 OpenAPI spec công khai (ví dụ của một API bạn quen thuộc), đọc description của 2-3 endpoint, tự đánh giá: mô tả đó có đủ tốt để làm tool description cho LLM không? Nếu không, viết lại description đó theo tiêu chí Ngày 15.
+2. Tìm 1 OpenAPI spec công khai (ví dụ của một API bạn quen thuộc), đọc description của 2-3 endpoint, tự đánh giá: mô tả đó có đủ tốt để làm tool description cho LLM không? Nếu không, viết lại description đó theo tiêu chí Phần 15.
 3. Nếu có thời gian, cài thử `mcp-superset` (xem README repo) và dùng MCP Inspector (`test-inspector.bat` trong repo) để quan sát danh sách tool được discover qua giao thức MCP — so sánh với việc gọi trực tiếp 1 hàm Python trong `tools/chart.py` không qua MCP.
 4. Viết 1 đoạn (5-8 câu) phản biện quan điểm "cứ dùng MCP cho mọi tool vì đó là chuẩn mới nhất" — nêu rõ ít nhất 2 tình huống MCP là lựa chọn tệ.
 
@@ -144,13 +144,13 @@ Quan sát: cấu trúc JSON Schema mô tả tham số (`type`, `properties`, `re
 MCP không chỉ chuẩn hoá tool — giao thức còn có khái niệm "resources" (dữ liệu server expose cho client đọc, không phải hành động) và "prompts" (template prompt server gợi ý cho client). Phần lớn thảo luận về MCP tập trung vào tool vì đó là phần liên quan trực tiếp tool-calling, nhưng khi đọc spec chính thức, đừng nhầm "MCP" với "chỉ là tool-calling qua giao thức khác".
 
 ### Chi phí vận hành thêm của MCP: process và transport
-Một MCP server là 1 process sống độc lập (hoặc 1 HTTP service). Điều này kéo theo bài toán vận hành mới không tồn tại ở function calling thuần: server phải được deploy, theo dõi uptime, xử lý version mismatch giữa client/server, và (quan trọng cho Ngày 20) quản lý auth qua transport riêng — khác hẳn việc chỉ gọi thẳng 1 hàm Python trong cùng process.
+Một MCP server là 1 process sống độc lập (hoặc 1 HTTP service). Điều này kéo theo bài toán vận hành mới không tồn tại ở function calling thuần: server phải được deploy, theo dõi uptime, xử lý version mismatch giữa client/server, và (quan trọng cho Phần 20) quản lý auth qua transport riêng — khác hẳn việc chỉ gọi thẳng 1 hàm Python trong cùng process.
 
 ### Framework lock-in và tốc độ thay đổi API
 LangChain/LlamaIndex thay đổi API tương đối nhanh giữa các phiên bản major — code viết theo 1 tutorial cũ có thể không chạy được với version mới nhất mà không sửa. Khi đánh giá "dùng framework có đáng không", tính luôn chi phí bảo trì dài hạn này, không chỉ tốc độ viết code lúc đầu.
 
 ### Không có "chuẩn duy nhất sẽ thắng"
-Đừng học Ngày 16 với tư duy "1 trong 4 cách này sẽ trở thành chuẩn duy nhất trong tương lai". Cả 4 vẫn tồn tại song song vì giải quyết vấn đề khác nhau ở layer khác nhau — hoàn toàn hợp lý khi 1 hệ thống dùng cả MCP (cho tool tái sử dụng liên team) VÀ function calling thuần (cho 1 tool nội bộ chỉ 1 app dùng) trong cùng kiến trúc.
+Đừng học Phần 16 với tư duy "1 trong 4 cách này sẽ trở thành chuẩn duy nhất trong tương lai". Cả 4 vẫn tồn tại song song vì giải quyết vấn đề khác nhau ở layer khác nhau — hoàn toàn hợp lý khi 1 hệ thống dùng cả MCP (cho tool tái sử dụng liên team) VÀ function calling thuần (cho 1 tool nội bộ chỉ 1 app dùng) trong cùng kiến trúc.
 
 ## Bài tập senior
 Sếp yêu cầu: "chuyển hết tool nội bộ hiện tại (viết bằng function calling thuần trong 3 microservice khác nhau) sang MCP vì nghe nói đó là tương lai". Bạn được giao đánh giá đề xuất này trước khi triển khai. Viết ra: (1) câu hỏi bạn sẽ hỏi lại để hiểu rõ động lực thật (có phải vì cần chia sẻ tool giữa nhiều team/app, hay chỉ vì hype), (2) trường hợp cụ thể nào chuyển sang MCP THỰC SỰ mang lại lợi ích đo được, (3) trường hợp nào nên giữ nguyên và lý do chi phí/lợi ích không đủ để đổi.

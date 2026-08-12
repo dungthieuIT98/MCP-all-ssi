@@ -1,4 +1,4 @@
-# Ngày 10 — Chunking strategy — sai ở đây là hỏng cả pipeline
+# Phần 10 — Chunking strategy — sai ở đây là hỏng cả pipeline
 
 ## Mục tiêu hôm nay
 Hiểu chunking không phải bước "cắt text cho vừa" tầm thường mà là quyết định kiến trúc ảnh hưởng trực tiếp tới chất lượng retrieval — chunk sai thì embedding tốt, vector DB tốt, LLM tốt cũng không cứu được, vì retrieval sẽ trả về đúng-sai-lệch ngay từ đầu.
@@ -29,7 +29,7 @@ Overlap là phần text lặp lại giữa 2 chunk liền kề (ví dụ chunk 1
 
 ### Chunking theo cấu trúc document — quan trọng nhất với tài liệu kỹ thuật
 Khi tài liệu có cấu trúc tường minh (markdown với heading, code block; HTML với tag; PDF có section) — **luôn ưu tiên chunk theo cấu trúc đó trước khi áp thêm rule về độ dài**. Vài nguyên tắc cụ thể:
-- **Markdown headers**: chia theo heading (`#`, `##`, `###`) trước, để mỗi chunk nằm trong một section có chủ đề rõ, sau đó mới áp fixed-size/recursive splitting *bên trong* section nếu section đó vẫn quá dài. Giữ lại heading cha (ví dụ prepend `"# Ngày 9 > ## Khi nào cần vector DB riêng"`) vào đầu mỗi chunk con giúp chunk tự mang được context mà không cần đọc toàn văn bản.
+- **Markdown headers**: chia theo heading (`#`, `##`, `###`) trước, để mỗi chunk nằm trong một section có chủ đề rõ, sau đó mới áp fixed-size/recursive splitting *bên trong* section nếu section đó vẫn quá dài. Giữ lại heading cha (ví dụ prepend `"# Phần 9 > ## Khi nào cần vector DB riêng"`) vào đầu mỗi chunk con giúp chunk tự mang được context mà không cần đọc toàn văn bản.
 - **Code block**: không bao giờ cắt ngang một code block — một hàm/class bị cắt đôi giữa chunk vừa vô nghĩa với LLM đọc, vừa có thể khiến LLM sinh code sai khi paste "một nửa hàm" vào câu trả lời. Luôn coi code block (giữa hai dấu ``` ``` ```) là một đơn vị không thể chia, dù nó vượt kích thước chunk mong muốn — chấp nhận chunk to hơn bình thường trong trường hợp này.
 - **Bảng (table)**: tương tự code block — một bảng bị cắt ngang mất hết ý nghĩa hàng/cột, nên coi là đơn vị nguyên vẹn.
 
@@ -69,7 +69,7 @@ for i, c in enumerate(chunks):
 
 # 2. Markdown header splitting — chunk theo section trước, giữ heading cha làm metadata
 markdown_text = """
-# Ngày 9 — Vector DB
+# Phần 9 — Vector DB
 
 ## Khi nào cần vector DB riêng
 Nội dung về việc khi nào nên dùng Pinecone/Qdrant...
@@ -105,7 +105,7 @@ Với source code, chia theo ranh giới cú pháp (function, class, method) cho
 ## Bài tập senior
 Team đang build RAG cho tài liệu compliance nội bộ (quy trình, quy định UBCKNN liên quan tới hoạt động của công ty), nguồn là các file Word/PDF có nhiều bảng biểu, danh sách điều khoản đánh số, và một số đoạn có ghi chú "Điều X tham chiếu Điều Y ở phần trước". Review pipeline chunking hiện tại của team (giả định): họ dùng `RecursiveCharacterTextSplitter` mặc định với `chunk_size=1000`, không xử lý gì đặc biệt cho bảng hoặc tham chiếu chéo giữa điều khoản. Chỉ ra tối thiểu 3 vấn đề cụ thể có thể xảy ra với pipeline này khi áp lên loại tài liệu compliance dạng này, và với mỗi vấn đề đề xuất một hướng xử lý (không cần code, mô tả chiến lược).
 
-## Checklist trước khi qua Ngày 11
+## Checklist trước khi qua Phần 11
 - [ ] Giải thích được vì sao chunk sai lan truyền lỗi xuống toàn bộ pipeline RAG, không chỉ nói "chunk sai thì kết quả sai".
 - [ ] Phân biệt được fixed-size, sentence-based/recursive, semantic chunking — biết trade-off của mỗi loại.
 - [ ] Biết khi nào và vì sao cần overlap, và overlap quá nhiều gây hại gì.

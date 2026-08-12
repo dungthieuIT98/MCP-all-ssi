@@ -1,4 +1,4 @@
-# Ngày 7 — Dự án Tuần 1: CLI hỏi-đáp có structured output
+# Phần 7 — Dự án Tuần 1: CLI hỏi-đáp có structured output
 
 ## Mục tiêu hôm nay
 Không học lý thuyết mới — ghép toàn bộ kiến thức 6 ngày trước (next-token prediction, context/token, prompt engineering, structured output, guardrail, model selection) thành một sản phẩm nhỏ chạy được thật, và tự đánh giá theo tiêu chuẩn senior chứ không chỉ "chạy được là xong".
@@ -25,21 +25,21 @@ Yêu cầu bắt buộc bất kể chọn chủ đề nào — đây là phần 
 
 ### 4. Log token usage và ước tính chi phí
 - Sau mỗi lệnh gọi, log lại `usage.input_tokens`, `usage.output_tokens`, và model đã dùng.
-- Có một hàm tính tổng chi phí ước lượng dựa trên giá bạn tự tra từ trang pricing chính thức (không hardcode số giá cũ/nhớ sai — đọc lại nguyên tắc ở Ngày 2 và Ngày 6).
+- Có một hàm tính tổng chi phí ước lượng dựa trên giá bạn tự tra từ trang pricing chính thức (không hardcode số giá cũ/nhớ sai — đọc lại nguyên tắc ở Phần 2 -6).
 
 ### 5. System prompt có cấu trúc, version control được
 - System prompt nằm trong file riêng (không hardcode string dài giữa logic code), có thể thay đổi mà không cần sửa code Python.
-- System prompt có đủ các khối: vai trò/phạm vi, ràng buộc hành vi, cách xử lý khi không chắc, định dạng đầu ra kỳ vọng (Ngày 5).
+- System prompt có đủ các khối: vai trò/phạm vi, ràng buộc hành vi, cách xử lý khi không chắc, định dạng đầu ra kỳ vọng (Phần 5).
 
 ### 6. Có test
-- Ít nhất 3-5 test case (dùng `pytest` hoặc tương đương) kiểm tra: parse JSON thành công với input hợp lệ, xử lý đúng khi model trả sai format (có thể mock response để test không tốn tiền API thật), và validate logic nghiệp vụ riêng (không chỉ dựa vào JSON Schema — liên hệ Ngày 4).
+- Ít nhất 3-5 test case (dùng `pytest` hoặc tương đương) kiểm tra: parse JSON thành công với input hợp lệ, xử lý đúng khi model trả sai format (có thể mock response để test không tốn tiền API thật), và validate logic nghiệp vụ riêng (không chỉ dựa vào JSON Schema — liên hệ Phần 4).
 
 ### 7. Model selection có chủ đích
-- Chọn model (nhỏ hay lớn) có lý do rõ ràng ghi lại trong README hoặc comment — không phải "mặc định dùng model mạnh nhất vì chắc ăn" (liên hệ Ngày 6).
+- Chọn model (nhỏ hay lớn) có lý do rõ ràng ghi lại trong README hoặc comment — không phải "mặc định dùng model mạnh nhất vì chắc ăn" (liên hệ Phần 6).
 
 ## Không bắt buộc nhưng cộng điểm senior
 - Prompt caching nếu system prompt đủ dài để đáng cache.
-- Nhận diện injection cơ bản nếu CLI cho phép người dùng dán văn bản dài từ nguồn ngoài (liên hệ Ngày 5).
+- Nhận diện injection cơ bản nếu CLI cho phép người dùng dán văn bản dài từ nguồn ngoài (liên hệ Phần 5).
 - CLI có flag để chọn model qua tham số dòng lệnh (`--model haiku` / `--model opus`) để dễ so sánh khi test.
 
 ## Cấu trúc thư mục gợi ý
@@ -72,9 +72,9 @@ week1-project/
 ## Tự đánh giá — 3 câu hỏi quyết định bạn có thực sự hiểu Tuần 1 hay chưa
 Trả lời thành thật 3 câu này cho chính dự án bạn vừa viết — nếu trả lời "không" hoặc "không chắc" cho bất kỳ câu nào, quay lại đọc phần tương ứng trước khi qua Tuần 2:
 
-1. Nếu model bạn đang dùng ngày mai đổi hành vi (ví dụ nâng cấp version, hoặc đổi từ Sonnet sang Opus), bạn có tự tin CLI của bạn vẫn hoạt động đúng, hay bạn phải sửa lại retry logic/parse logic vì đã viết cứng theo hành vi cụ thể của một model? (liên hệ Ngày 1, Ngày 3)
-2. Nếu có người cố tình dán một đoạn văn bản chứa câu "bỏ qua mọi chỉ dẫn trước" vào CLI của bạn, bạn biết chính xác điều gì sẽ xảy ra — không phải đoán? (liên hệ Ngày 5)
-3. Nếu CFO hỏi "CLI này chạy 10,000 lần/tháng thì tốn bao nhiêu tiền", bạn có thể trả lời bằng số cụ thể dựa trên log usage thật đã thu thập, không phải ước lượng cảm tính? (liên hệ Ngày 2, Ngày 6)
+1. Nếu model bạn đang dùng ngày mai đổi hành vi (ví dụ nâng cấp version, hoặc đổi từ Sonnet sang Opus), bạn có tự tin CLI của bạn vẫn hoạt động đúng, hay bạn phải sửa lại retry logic/parse logic vì đã viết cứng theo hành vi cụ thể của một model? (liên hệ Phần 1, Phần 3)
+2. Nếu có người cố tình dán một đoạn văn bản chứa câu "bỏ qua mọi chỉ dẫn trước" vào CLI của bạn, bạn biết chính xác điều gì sẽ xảy ra — không phải đoán? (liên hệ Phần 5)
+3. Nếu CFO hỏi "CLI này chạy 10,000 lần/tháng thì tốn bao nhiêu tiền", bạn có thể trả lời bằng số cụ thể dựa trên log usage thật đã thu thập, không phải ước lượng cảm tính? (liên hệ Phần 2, Phần 6)
 
 ## Nếu bạn thấy dự án này "quá dễ" hoặc "quá cơ bản"
 Đó là dấu hiệu tốt cho Tuần 1 — Tuần 1 chỉ là nền tảng single-call, chưa có agent loop, chưa có tool-calling thật, chưa có RAG, chưa có eval framework nghiêm túc. Những phần đó nằm ở các tuần sau của roadmap 30 ngày. Nếu bạn hoàn thành checklist senior ở trên một cách nghiêm túc (không tự lừa mình rằng "chắc cũng ổn" ở phần retry/validate), bạn đã có nền tảng chắc để bước vào phần agent/tool-calling nâng cao mà không phải quay lại vá những lỗ hổng cơ bản này giữa đường.
@@ -83,4 +83,4 @@ Trả lời thành thật 3 câu này cho chính dự án bạn vừa viết —
 - [ ] CLI chạy được end-to-end với ít nhất 5 input khác nhau, bao gồm ít nhất 1 input cố tình gây lỗi (input rỗng, input cực dài, input vô nghĩa).
 - [ ] Toàn bộ checklist "đạt yêu cầu senior" ở trên đã được tick thật (không tick khống).
 - [ ] Code đã commit git với lịch sử rõ ràng, README giải thích được lý do thiết kế (model chọn, retry limit chọn, vì sao).
-- [ ] Tự trả lời được 3 câu hỏi tự đánh giá ở trên mà không cần mở lại tài liệu Ngày 1-6.
+- [ ] Tự trả lời được 3 câu hỏi tự đánh giá ở trên mà không cần mở lại tài liệu Phần 1-6.

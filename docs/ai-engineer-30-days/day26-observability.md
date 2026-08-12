@@ -1,4 +1,4 @@
-# Ngày 26 — Observability: trace 1 request AI end-to-end
+# Phần 26 — Observability: trace 1 request AI end-to-end
 
 ## Mục tiêu hôm nay
 Hiểu nguyên lý trace một request AI từ đầu tới cuối (input user → retrieval → prompt build → tool call → output), biết log gì/không log gì, và nắm nguyên lý observability để tự chọn công cụ phù hợp — không cần gắn với 1 sản phẩm cụ thể.
@@ -15,13 +15,13 @@ Backend dev đã quen observability cho web service: log request/response, trace
 
 - **Prompt là một phần dữ liệu quan trọng cần quan sát**, không chỉ input/output ở tầng API — vì cùng một bug có thể do prompt build sai (ví dụ thiếu context, template lỗi) mà response ở tầng ngoài "trông vẫn hợp lệ về hình thức". Nếu không log được prompt thực tế đã gửi cho model (sau khi đã build đầy đủ system + few-shot + context), rất khó debug tại sao model trả lời sai.
 - **Quyết định của model là một "hộp đen" cần trace riêng**: việc model chọn gọi tool nào, với tham số gì, dựa trên phần nào của context — đây là loại quyết định không tồn tại trong service CRUD (code luôn chạy đường logic xác định), cần có trace riêng cho từng bước quyết định, không chỉ trace thời gian xử lý.
-- **Non-determinism**: cùng input, hai lần chạy có thể ra hai kết quả khác nhau — nên trace không chỉ để tìm bug tái lập được (giống code thông thường) mà còn để hiểu *phân bố* hành vi qua nhiều lần chạy, gắn liền với phần eval (Ngày 22-23).
+- **Non-determinism**: cùng input, hai lần chạy có thể ra hai kết quả khác nhau — nên trace không chỉ để tìm bug tái lập được (giống code thông thường) mà còn để hiểu *phân bố* hành vi qua nhiều lần chạy, gắn liền với phần eval (Phần 22-23).
 
 ### Trace 1 request AI end-to-end — các mốc cần thấy được
 Một request đi qua một pipeline AI (RAG + agent, ví dụ điển hình) có các bước cần trace riêng biệt, mỗi bước là một "span" trong thuật ngữ tracing:
 
 1. **Input user**: câu hỏi/message gốc, kèm metadata (user id, session id, timestamp) — là gốc của toàn bộ trace, mọi span khác đều liên kết về đây qua một trace ID chung.
-2. **Retrieval (nếu có RAG)**: query dùng để tìm kiếm (có thể đã được rewrite — Ngày 12), danh sách document/chunk trả về, điểm similarity/rerank score của từng kết quả. Đây là bước hay bị bỏ qua khi trace — nhiều hệ thống chỉ log "có gọi retrieval" mà không log *kết quả* trả về, khiến không thể debug được câu hỏi "model trả lời sai vì retrieval sai, hay vì generation sai trên context đúng".
+2. **Retrieval (nếu có RAG)**: query dùng để tìm kiếm (có thể đã được rewrite — Phần 12), danh sách document/chunk trả về, điểm similarity/rerank score của từng kết quả. Đây là bước hay bị bỏ qua khi trace — nhiều hệ thống chỉ log "có gọi retrieval" mà không log *kết quả* trả về, khiến không thể debug được câu hỏi "model trả lời sai vì retrieval sai, hay vì generation sai trên context đúng".
 3. **Prompt được build ra sao**: nội dung system prompt, phần few-shot (nếu có), phần context được chèn vào (kết quả retrieval, lịch sử hội thoại) — nói cách khác, log **prompt cuối cùng thực sự gửi cho model**, không chỉ log input gốc của user. Đây thường là bước debug quan trọng nhất vì rất nhiều lỗi thực chất là lỗi ở tầng "build prompt" (template sai, chèn nhầm biến, context bị cắt cụt do vượt giới hạn) chứ không phải lỗi ở model.
 4. **Tool call nào được gọi**: tên tool, tham số gọi, kết quả trả về (hoặc lỗi), thời gian thực thi mỗi tool call — với agent nhiều bước, cần thấy được toàn bộ chuỗi tool call theo đúng thứ tự, không chỉ tool call cuối cùng.
 5. **Output cuối**: câu trả lời cuối cùng trả cho user, cùng metadata (model dùng, token usage, latency của từng bước và tổng).
@@ -29,11 +29,11 @@ Một request đi qua một pipeline AI (RAG + agent, ví dụ điển hình) c�
 Toàn bộ 5 mốc này nên liên kết bằng một **trace ID chung** (đúng nguyên lý distributed tracing đã quen từ hệ thống microservice) — để khi có 1 request lỗi, chỉ cần trace ID là lấy lại được toàn bộ hành trình, không phải grep log rời rạc rồi tự ghép bằng tay theo timestamp.
 
 ### Log những gì — và bắt buộc KHÔNG log gì
-**Nên log** (phục vụ debug và eval — nhiều nội dung log production thật ra có thể tái sử dụng làm case mới cho golden dataset ở Ngày 22, đúng vòng lặp "dataset sống"):
+**Nên log** (phục vụ debug và eval — nhiều nội dung log production thật ra có thể tái sử dụng làm case mới cho golden dataset ở Phần 22, đúng vòng lặp "dataset sống"):
 - Prompt đầy đủ đã gửi (hoặc ít nhất đủ để tái tạo — có thể log riêng phần tĩnh và phần biến đổi nếu prompt quá lớn để log toàn bộ mỗi lần).
 - Response đầy đủ từ model.
-- Token usage (input/output/cache — xem lại Ngày 24) để phục vụ cost tracking.
-- Latency chi tiết theo từng bước (TTFT, TTLT, thời gian mỗi tool call — xem lại Ngày 25).
+- Token usage (input/output/cache — xem lại Phần 24) để phục vụ cost tracking.
+- Latency chi tiết theo từng bước (TTFT, TTLT, thời gian mỗi tool call — xem lại Phần 25).
 - Tool call: tên, tham số, kết quả, có lỗi không.
 - Metadata: model version dùng, timestamp, trace/session ID, category câu hỏi nếu có phân loại.
 
@@ -89,7 +89,7 @@ def redact_pii(text: str) -> str:
 
 
 def fake_retrieval(query: str) -> list[dict]:
-    """Giả lập bước retrieval — thực tế sẽ gọi vector DB (Ngày 9-11)."""
+    """Giả lập bước retrieval — thực tế sẽ gọi vector DB (Phần 9-11)."""
     return [
         {"doc_id": "doc-1", "score": 0.87, "text": "Superset hỗ trợ tạo dashboard từ dataset SQL."},
         {"doc_id": "doc-2", "score": 0.81, "text": "Dataset trong Superset ánh xạ tới 1 bảng hoặc 1 câu SQL."},
@@ -162,12 +162,12 @@ Nếu pipeline AI trải qua nhiều service riêng biệt (ví dụ 1 service g
 Ở traffic lớn, lưu trace đầy đủ cho mọi request có thể tốn chi phí lưu trữ/băng thông đáng kể — nhiều hệ thống dùng sampling (chỉ trace một tỷ lệ request, hoặc trace 100% cho request có lỗi/latency cao bất thường, sampling thấp cho request "bình thường"). Quyết định tỷ lệ sampling là đánh đổi giữa chi phí quan sát và khả năng bắt được case hiếm — tương tự nguyên lý sampling trong APM truyền thống.
 
 ### Gắn eval và feedback vào trace
-Nhiều nền tảng LLM observability cho phép gắn kết quả eval (Ngày 22, LLM-as-judge) hoặc feedback signal thật (Ngày 23, thumbs up/down) trực tiếp vào trace tương ứng — biến observability từ "chỉ xem cái gì đã xảy ra" thành "xem cái gì đã xảy ra VÀ nó có tốt không" trong cùng một nơi, thay vì hai hệ thống rời rạc phải tự ghép bằng ID.
+Nhiều nền tảng LLM observability cho phép gắn kết quả eval (Phần 22, LLM-as-judge) hoặc feedback signal thật (Phần 23, thumbs up/down) trực tiếp vào trace tương ứng — biến observability từ "chỉ xem cái gì đã xảy ra" thành "xem cái gì đã xảy ra VÀ nó có tốt không" trong cùng một nơi, thay vì hai hệ thống rời rạc phải tự ghép bằng ID.
 
 ## Bài tập senior
 Một hệ thống chatbot nội bộ đang gặp phản hồi "đôi khi trả lời sai thông tin dataset, không rõ tại sao" — không có trace/observability nào được thiết lập từ đầu, chỉ có log dạng text tự do rải rác (`print` ra file log, không có cấu trúc). Viết một kế hoạch triển khai observability tối thiểu (dạng bước ưu tiên, không cần chọn công cụ cụ thể) để trong 1-2 tuần có thể debug được câu hỏi "sai ở retrieval hay sai ở generation" cho các case bị báo lỗi — nêu rõ bạn sẽ ưu tiên thêm trace ở đâu trước nếu chỉ có thời gian làm từng phần một, và giải thích vì sao chọn thứ tự đó.
 
-## Checklist trước khi qua Ngày 27
+## Checklist trước khi qua Phần 27
 - [ ] Kể được đủ 5 mốc cần trace trong 1 request AI end-to-end.
 - [ ] Giải thích được vì sao log prompt cuối cùng (đã build) quan trọng hơn chỉ log input gốc của user.
 - [ ] Biết rõ nguyên tắc không log PII/dữ liệu nhạy cảm, và có ý tưởng cụ thể cách redact trước khi log.

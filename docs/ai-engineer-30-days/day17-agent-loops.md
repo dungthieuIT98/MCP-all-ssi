@@ -1,4 +1,4 @@
-# Ngày 17 — Agent loop: ReAct, planning, khi nào dừng
+# Phần 17 — Agent loop: ReAct, planning, khi nào dừng
 
 ## Mục tiêu hôm nay
 Hiểu cấu trúc vòng lặp agent (ReAct), 2 chiến lược lập kế hoạch, và các điều kiện dừng bắt buộc phải có trước khi agent chạy trong bất kỳ hệ thống thật — vì agent loop không kiểm soát là nguồn lỗi production phổ biến nhất của kiến trúc agent.
@@ -23,9 +23,9 @@ Action: ...
 Final Answer: (model trả lời, không còn tool_use)
 ```
 
-Điểm giá trị của ReAct so với "chỉ gọi tool 1 lần rồi trả lời" (single-step tool use, đã thấy ở Ngày 15): agent có thể **thích nghi giữa các bước** — quan sát kết quả 1 tool call rồi quyết định bước tiếp theo dựa trên kết quả đó, chứ không phải lên kế hoạch cứng từ đầu và làm y nguyên. Đây là khác biệt giữa "gọi tool" (Ngày 15, có thể chỉ 1 vòng) và "agent" (nhiều vòng, có trạng thái tích lũy qua các bước).
+Điểm giá trị của ReAct so với "chỉ gọi tool 1 lần rồi trả lời" (single-step tool use, đã thấy ở Phần 15): agent có thể **thích nghi giữa các bước** — quan sát kết quả 1 tool call rồi quyết định bước tiếp theo dựa trên kết quả đó, chứ không phải lên kế hoạch cứng từ đầu và làm y nguyên. Đây là khác biệt giữa "gọi tool" (Phần 15, có thể chỉ 1 vòng) và "agent" (nhiều vòng, có trạng thái tích lũy qua các bước).
 
-Về mặt kỹ thuật, ReAct không cần cơ chế đặc biệt gì ngoài tool-calling đã học — nó chỉ là **cùng 1 vòng lặp tool-use (Ngày 15) được chạy nhiều lần liên tục**, với lịch sử hội thoại tích lũy dần các cặp Action/Observation. Model "reasoning" chỉ là text model sinh ra trước hoặc cùng lúc với tool_use — với các model hỗ trợ extended thinking/reasoning tokens, phần suy luận này có thể tách riêng khỏi phần trả lời cuối, nhưng bản chất vòng lặp bên ngoài không đổi.
+Về mặt kỹ thuật, ReAct không cần cơ chế đặc biệt gì ngoài tool-calling đã học — nó chỉ là **cùng 1 vòng lặp tool-use (Phần 15) được chạy nhiều lần liên tục**, với lịch sử hội thoại tích lũy dần các cặp Action/Observation. Model "reasoning" chỉ là text model sinh ra trước hoặc cùng lúc với tool_use — với các model hỗ trợ extended thinking/reasoning tokens, phần suy luận này có thể tách riêng khỏi phần trả lời cuối, nhưng bản chất vòng lặp bên ngoài không đổi.
 
 ### Planning: task decomposition trước vs plan-as-you-go
 Có 2 chiến lược chính để agent xử lý task nhiều bước:
@@ -49,7 +49,7 @@ Một agent loop không có điều kiện dừng rõ ràng là một hệ thố
 - **Không tiến triển (no-progress detection)**: phát hiện agent lặp lại cùng 1 hành động — loại lỗi rất thường gặp là **agent gọi lại đúng 1 tool với đúng input đã thử trước đó**, thường xảy ra khi tool trả lỗi hoặc kết quả không như model "mong đợi" và model không có cách nào khác ngoài thử lại y nguyên. Cách phát hiện: so sánh (tên tool, input đã normalize) của lượt hiện tại với lịch sử các lượt trước trong cùng request; nếu trùng quá N lần liên tiếp, chặn vòng lặp và trả lỗi/yêu cầu người dùng can thiệp thay vì để agent tự "cố gắng" vô nghĩa.
 
 ### Vì sao agent loop dễ chạy vô hạn hoặc lặp vô nghĩa
-- Model không có "bộ nhớ" về việc nó đã thử gì trừ khi lịch sử đó còn nằm trong context hiện tại — nếu context bị cắt/tóm tắt (do quá dài, xem Ngày 18) và mất chi tiết "đã thử input X, bị lỗi Y", model có thể lặp lại chính xác input đã thất bại.
+- Model không có "bộ nhớ" về việc nó đã thử gì trừ khi lịch sử đó còn nằm trong context hiện tại — nếu context bị cắt/tóm tắt (do quá dài, xem Phần 18) và mất chi tiết "đã thử input X, bị lỗi Y", model có thể lặp lại chính xác input đã thất bại.
 - Tool trả lỗi mơ hồ (chỉ "Error" không giải thích tại sao) khiến model không có tín hiệu để đổi chiến lược — nó chỉ có 2 lựa chọn: thử input khác (nếu đoán được lý do lỗi) hoặc thử lại y nguyên (nếu không đoán được) — và không phải lúc nào model cũng chọn đúng.
 - Task người dùng đưa ra mơ hồ hoặc không thể hoàn thành với bộ tool hiện có — agent tiếp tục thử các tool khác nhau vô định vì không có cơ chế nào cho phép nó "báo cáo thất bại và dừng" một cách rõ ràng (nếu prompt không hướng dẫn rõ khi nào nên từ bỏ).
 
@@ -167,7 +167,7 @@ Một số model hỗ trợ sinh "thinking" tách riêng khỏi output cuối (k
 Khái niệm circuit breaker từ backend truyền thống (ngắt mạch khi 1 dependency lỗi liên tục) áp dụng trực tiếp cho agent: nếu 1 tool cụ thể lỗi N lần liên tiếp trong cùng request (không chỉ input giống nhau, mà bất kỳ input nào tới tool đó), có thể tạm loại tool đó khỏi danh sách tool active cho các vòng còn lại của request đó, buộc model tìm hướng khác hoặc báo thất bại rõ ràng hơn.
 
 ### Human-in-the-loop như một điều kiện dừng có chủ đích
-Với task có side-effect quan trọng (xoá dữ liệu, gửi email ra ngoài, thực hiện giao dịch), điều kiện dừng nên bao gồm 1 checkpoint bắt buộc dừng lại chờ xác nhận người dùng trước khi model được tiếp tục vòng lặp — đây không phải "lỗi" mà là thiết kế chủ đích, liên hệ trực tiếp tới nguyên tắc least privilege ở Ngày 20.
+Với task có side-effect quan trọng (xoá dữ liệu, gửi email ra ngoài, thực hiện giao dịch), điều kiện dừng nên bao gồm 1 checkpoint bắt buộc dừng lại chờ xác nhận người dùng trước khi model được tiếp tục vòng lặp — đây không phải "lỗi" mà là thiết kế chủ đích, liên hệ trực tiếp tới nguyên tắc least privilege ở Phần 20.
 
 ### Đo lường "tại sao agent dừng" như một metric
 Ở hệ thống production, nên log lý do dừng của mọi request agent (done tự nhiên / max_iteration / no_progress / cost_budget / time_budget / human_stop) như 1 metric theo dõi liên tục — tỷ lệ dừng vì `max_iteration` hoặc `no_progress` tăng bất thường là tín hiệu sớm cho thấy tool description kém hoặc task người dùng đang vượt khả năng hệ thống, cần điều tra trước khi user complain.

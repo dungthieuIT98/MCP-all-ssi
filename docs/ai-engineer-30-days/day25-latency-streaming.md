@@ -1,4 +1,4 @@
-# Ngày 25 — Latency & streaming: p50/p95/p99 cho hệ thống có LLM
+# Phần 25 — Latency & streaming: p50/p95/p99 cho hệ thống có LLM
 
 ## Mục tiêu hôm nay
 Hiểu latency của LLM khác latency API thông thường ở bản chất (time-to-first-token, variance cao theo độ dài output), biết đo đúng percentile, và thiết kế streaming/timeout/retry hợp lý cho LLM call.
@@ -11,7 +11,7 @@ Hiểu latency của LLM khác latency API thông thường ở bản chất (ti
 ## Khái niệm cốt lõi
 
 ### Time-to-first-token (TTFT) vs time-to-last-token (TTLT)
-API thông thường (REST CRUD, tra DB) trả về toàn bộ response cùng lúc — chỉ có một mốc thời gian đáng nói: lúc response hoàn tất. LLM sinh output **tuần tự, từng token một** (về bản chất autoregressive — xem lại Ngày 1), nên có hai mốc thời gian tách biệt và đều quan trọng:
+API thông thường (REST CRUD, tra DB) trả về toàn bộ response cùng lúc — chỉ có một mốc thời gian đáng nói: lúc response hoàn tất. LLM sinh output **tuần tự, từng token một** (về bản chất autoregressive — xem lại Phần 1), nên có hai mốc thời gian tách biệt và đều quan trọng:
 
 - **Time-to-first-token (TTFT)**: thời gian từ lúc gửi request tới lúc nhận được token/chunk đầu tiên. Phần này bao gồm thời gian xử lý toàn bộ input (đọc prompt, prefill context) trước khi model bắt đầu sinh token đầu ra — với prompt dài, TTFT có thể chiếm phần đáng kể của tổng latency dù chưa sinh ra chữ nào.
 - **Time-to-last-token (TTLT)**: thời gian từ lúc gửi request tới lúc nhận token cuối cùng — đây là "tổng thời gian" theo nghĩa truyền thống. TTLT phụ thuộc trực tiếp vào **số token output sinh ra** — output dài hơn thì TTLT dài hơn theo cách gần tuyến tính, khác hẳn API thông thường nơi thời gian xử lý thường không phụ thuộc "kích thước câu trả lời" theo cách rõ rệt như vậy.
@@ -30,7 +30,7 @@ Percentile latency (p50 = trung vị, p95 = 95% request nhanh hơn giá trị n�
 
 - **Variance cao hơn nhiều, và có nguyên nhân rõ ràng, không phải nhiễu ngẫu nhiên**: độ dài output do model tự quyết định sinh ra bao nhiêu token — hai request giống nhau về input có thể ra output ngắn/dài rất khác nhau tuỳ nội dung, kéo theo TTLT khác nhau đáng kể. Với API thông thường, variance thường do hạ tầng (network, DB load) — với LLM, variance còn cộng thêm yếu tố "nội dung sinh ra dài bao nhiêu", một biến số nằm ngoài kiểm soát trực tiếp của hạ tầng.
 - **Nên đo TTFT và TTLT riêng biệt theo percentile, không trộn chung**: p95 TTFT cho biết "hệ thống có bắt đầu phản hồi nhanh không" (phụ thuộc hạ tầng, độ dài input, tải hệ thống) — p95 TTLT cho biết "tác vụ dài nhất mất bao lâu để xong hoàn toàn" (phụ thuộc thêm cả độ dài output). Chỉ báo cáo một số "latency trung bình" duy nhất cho LLM system là dấu hiệu thiếu hiểu về đặc thù hệ thống.
-- **Phân tách percentile theo loại tác vụ**: nếu hệ thống có nhiều loại request khác nhau về độ dài output kỳ vọng (ví dụ tool đơn giản trả 1 câu ngắn vs tác vụ tổng hợp báo cáo dài), gộp chung percentile của hai loại vào một số sẽ cho một con số vô nghĩa (trộn lẫn phân bố khác nhau) — nên đo riêng theo category, giống nguyên tắc phân nhóm category trong golden dataset ở Ngày 22.
+- **Phân tách percentile theo loại tác vụ**: nếu hệ thống có nhiều loại request khác nhau về độ dài output kỳ vọng (ví dụ tool đơn giản trả 1 câu ngắn vs tác vụ tổng hợp báo cáo dài), gộp chung percentile của hai loại vào một số sẽ cho một con số vô nghĩa (trộn lẫn phân bố khác nhau) — nên đo riêng theo category, giống nguyên tắc phân nhóm category trong golden dataset ở Phần 22.
 - **p99 với LLM dễ bị kéo dài bất thường bởi rate limit/retry ở phía nhà cung cấp** hơn API nội bộ tự host — cần phân biệt rõ trong log: latency chậm vì model sinh output dài, hay chậm vì phải chờ retry do rate limit/lỗi tạm thời (hai nguyên nhân cần hai hướng xử lý khác nhau).
 
 ### Timeout/retry strategy — không thể retry vô tội vạ
@@ -46,7 +46,7 @@ Thiết kế retry thực dụng cho LLM:
 - **Idempotency khi retry có tác dụng phụ**: nếu LLM call nằm trong một agent loop có tool-calling (Tuần 3), retry sau khi tool đã chạy thành công một phần có thể gây tác dụng phụ lặp lại (ví dụ gọi lại một tool ghi dữ liệu) — cần thiết kế idempotency ở tầng tool, không chỉ ở tầng gọi model.
 
 ## Đối chiếu với code thật trong repo
-`core/context.py` cấu hình `httpx.AsyncClient` với `timeout=30.0` cho các lệnh gọi tới Superset — đây là timeout cho API truyền thống (tra cứu dataset/chart trong DB), có thời gian xử lý ổn định và dự đoán được, khác hẳn bản chất timeout cần cho một lệnh gọi LLM (nơi thời gian phụ thuộc độ dài output sinh ra, không cố định). Nếu một ngày `mcp-superset` được mở rộng để tự gọi LLM ở tầng server (ví dụ tool tự tóm tắt kết quả trước khi trả cho agent), timeout cho lệnh gọi đó cần thiết kế tách biệt khỏi timeout gọi Superset — không dùng chung hằng số 30 giây, vì bản chất hai loại latency khác nhau hoàn toàn. Đây cũng là lý do các tool hiện tại dùng `handle_api_errors` (`utils/decorators.py`) bắt mọi exception thành `{"error": ...}` có cấu trúc — cùng nguyên tắc này áp dụng cho lỗi timeout/retry của LLM call: luôn trả lỗi có cấu trúc rõ, không để exception thô/stack trace lộ ra ngoài (liên hệ lại ở Ngày 27 khi nói về insecure output handling).
+`core/context.py` cấu hình `httpx.AsyncClient` với `timeout=30.0` cho các lệnh gọi tới Superset — đây là timeout cho API truyền thống (tra cứu dataset/chart trong DB), có thời gian xử lý ổn định và dự đoán được, khác hẳn bản chất timeout cần cho một lệnh gọi LLM (nơi thời gian phụ thuộc độ dài output sinh ra, không cố định). Nếu một ngày `mcp-superset` được mở rộng để tự gọi LLM ở tầng server (ví dụ tool tự tóm tắt kết quả trước khi trả cho agent), timeout cho lệnh gọi đó cần thiết kế tách biệt khỏi timeout gọi Superset — không dùng chung hằng số 30 giây, vì bản chất hai loại latency khác nhau hoàn toàn. Đây cũng là lý do các tool hiện tại dùng `handle_api_errors` (`utils/decorators.py`) bắt mọi exception thành `{"error": ...}` có cấu trúc — cùng nguyên tắc này áp dụng cho lỗi timeout/retry của LLM call: luôn trả lỗi có cấu trúc rõ, không để exception thô/stack trace lộ ra ngoài (liên hệ lại ở Phần 27 khi nói về insecure output handling).
 
 ## Thực hành
 ```python
@@ -154,12 +154,12 @@ Khi model quyết định gọi tool giữa lúc đang stream (Tuần 3), luồn
 Một pipeline RAG hoặc agent nhiều bước (retrieve → rerank → generate → có thể gọi tool → generate lại) cộng dồn latency của từng bước LLM — TTLT tổng của cả pipeline có thể lớn hơn nhiều so với một lệnh gọi LLM đơn lẻ. Cần đặt "latency budget" cho từng bước ngay từ thiết kế (bước nào được phép tốn bao nhiêu thời gian tối đa) thay vì đo tổng sau cùng rồi mới ngạc nhiên vì sao chậm — nguyên tắc giống phân rã latency budget trong hệ thống microservice truyền thống, chỉ khác biến số đầu vào (độ dài output) khó dự đoán hơn.
 
 ### Speculative/parallel calls để giảm latency cảm nhận
-Một số kiến trúc gọi song song nhiều bước không phụ thuộc nhau (ví dụ vừa gọi model chính vừa gọi trước một bước chuẩn bị khác) để giảm tổng latency cảm nhận, đánh đổi bằng việc có thể lãng phí một phần compute nếu kết quả song song đó không dùng tới. Cân nhắc kỹ chi phí phát sinh trước khi áp dụng — đây là tối ưu latency đổi lấy cost, ngược hướng với các kỹ thuật ở Ngày 24, cần cân bằng theo ưu tiên thực tế của hệ thống (SLA latency có quan trọng hơn cost ở use case đó không).
+Một số kiến trúc gọi song song nhiều bước không phụ thuộc nhau (ví dụ vừa gọi model chính vừa gọi trước một bước chuẩn bị khác) để giảm tổng latency cảm nhận, đánh đổi bằng việc có thể lãng phí một phần compute nếu kết quả song song đó không dùng tới. Cân nhắc kỹ chi phí phát sinh trước khi áp dụng — đây là tối ưu latency đổi lấy cost, ngược hướng với các kỹ thuật ở Phần 24, cần cân bằng theo ưu tiên thực tế của hệ thống (SLA latency có quan trọng hơn cost ở use case đó không).
 
 ## Bài tập senior
 Một tính năng chatbot nội bộ đang bị phàn nàn "chậm" dù đã dùng streaming. Đo thực tế cho thấy p50 TTFT khoảng 800ms (chấp nhận được) nhưng p95 TTLT lên tới hơn 20 giây cho một số câu hỏi. Viết một quy trình chẩn đoán (dạng bước) để xác định nguyên nhân p95 TTLT cao là do: (a) output thực sự dài cho những câu hỏi đó (bản chất bài toán), (b) rate limit/retry ở phía nhà cung cấp, hay (c) một bước xử lý phía trước/sau lệnh gọi model (ví dụ retrieval chậm) đang được tính nhầm vào latency của LLM. Với mỗi nguyên nhân, đề xuất một hướng xử lý khác nhau — không có một fix chung cho cả ba.
 
-## Checklist trước khi qua Ngày 26
+## Checklist trước khi qua Phần 26
 - [ ] Phân biệt rõ TTFT và TTLT, biết vì sao streaming cải thiện cái này mà không đổi cái kia.
 - [ ] Giải thích được vì sao variance latency LLM cao hơn API thông thường, gắn với nguyên nhân cụ thể (độ dài output).
 - [ ] Biết đo p50/p95/p99 riêng cho TTFT và TTLT, và vì sao cần phân theo category tác vụ.

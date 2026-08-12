@@ -1,11 +1,11 @@
-# Ngày 22 — Eval framework nghiêm túc: offline eval, golden dataset, LLM-as-judge
+# Phần 22 — Eval framework nghiêm túc: offline eval, golden dataset, LLM-as-judge
 
 ## Mục tiêu hôm nay
 Hiểu vì sao eval có hệ thống là năng lực phân biệt senior với junior trong AI engineering, và tự xây được một vòng eval offline tối thiểu: golden dataset, chấm điểm tự động (kể cả bằng LLM-as-judge), chạy trong CI.
 
 ## Đọc trước
 - [Anthropic docs](https://docs.anthropic.com/) — mục về đánh giá chất lượng model/prompt (tìm "evaluate" trong docs, nội dung cụ thể có thể đổi theo thời điểm, tra bản mới nhất).
-- [OWASP GenAI Security Project](https://owasp.org/www-project-top-10-for-large-language-model-applications/) — không trực tiếp về eval nhưng cùng nhóm tài liệu LLMOps sẽ dùng lại ở Ngày 27, đọc trước để quen thuật ngữ.
+- [OWASP GenAI Security Project](https://owasp.org/www-project-top-10-for-large-language-model-applications/) — không trực tiếp về eval nhưng cùng nhóm tài liệu LLMOps sẽ dùng lại ở Phần 27, đọc trước để quen thuật ngữ.
 - Tài liệu chung về LLMOps/eval: tìm theo từ khoá "LLM evaluation framework", "golden dataset", "LLM-as-judge" — không có một nguồn "chính thức" duy nhất, đây là lĩnh vực đang định hình, nên đối chiếu nhiều nguồn thay vì tin một bài viết.
 
 ## Khái niệm cốt lõi
@@ -20,7 +20,7 @@ Junior engineer khi đổi prompt hoặc đổi model thường làm việc: gõ
 Senior engineer coi eval là một phần bắt buộc của thay đổi liên quan LLM, giống như unit test là bắt buộc của thay đổi code logic thông thường — không phải bước "làm thêm cho chắc" mà là điều kiện để merge.
 
 ### Offline eval là gì
-Offline eval là đánh giá chất lượng model/prompt/pipeline **trước khi lên production**, chạy trên một bộ dữ liệu cố định (golden dataset), không có user thật tham gia. Đối lập với online eval (Ngày 23) — đánh giá trên traffic thật sau khi đã deploy.
+Offline eval là đánh giá chất lượng model/prompt/pipeline **trước khi lên production**, chạy trên một bộ dữ liệu cố định (golden dataset), không có user thật tham gia. Đối lập với online eval (Phần 23) — đánh giá trên traffic thật sau khi đã deploy.
 
 Offline eval cần ba thành phần:
 - **Golden dataset**: tập input đại diện, kèm expected output hoặc tiêu chí chấm điểm.
@@ -49,7 +49,7 @@ Với bài toán không có "đáp án đúng duy nhất" để so khớp chuỗ
 - **Length bias**: nhiều LLM-as-judge có xu hướng chấm câu trả lời dài hơn là "tốt hơn", "đầy đủ hơn", dù nội dung dài không đồng nghĩa chất lượng cao — cần thiết kế rubric chỉ rõ "độ dài không phải tiêu chí", và test thử bằng cách đổi chỗ 2 câu trả lời (một ngắn đúng, một dài lan man) để xem judge có bị lệch không.
 - **Position bias**: khi judge so sánh hai output A/B, thứ tự đưa vào prompt (A trước hay B trước) có thể ảnh hưởng kết quả — giảm bằng cách chạy cả hai thứ tự và lấy trung bình, hoặc random hoá thứ tự.
 - **Judge không phải oracle tuyệt đối.** Judge có thể sai, đặc biệt với domain chuyên biệt (thuật ngữ tài chính, mã chứng khoán) nếu judge không được cấp đủ context để biết đúng/sai thật. Luôn kiểm định judge: lấy một mẫu nhỏ, cho người thật chấm độc lập, so sánh với judge — nếu lệch nhiều, sửa rubric hoặc đổi model judge trước khi tin số liệu ở scale lớn.
-- **Prompt của judge cũng cần eval.** Rubric mơ hồ ("chấm câu trả lời này có tốt không, từ 1-10") cho kết quả nhiễu, không lặp lại được (chạy 2 lần cho 2 điểm khác nhau với cùng input). Rubric tốt liệt kê tiêu chí cụ thể, có ví dụ điểm cao/điểm thấp, và yêu cầu output có cấu trúc (structured output — xem lại Ngày 4) để dễ parse và aggregate.
+- **Prompt của judge cũng cần eval.** Rubric mơ hồ ("chấm câu trả lời này có tốt không, từ 1-10") cho kết quả nhiễu, không lặp lại được (chạy 2 lần cho 2 điểm khác nhau với cùng input). Rubric tốt liệt kê tiêu chí cụ thể, có ví dụ điểm cao/điểm thấp, và yêu cầu output có cấu trúc (structured output — xem lại Phần 4) để dễ parse và aggregate.
 
 ### Eval tự động hoá trong CI
 Mục tiêu: mỗi PR đổi prompt/model/pipeline logic tự động chạy golden dataset, báo cáo pass rate, và (tuỳ mức độ nghiêm ngặt) chặn merge nếu điểm giảm dưới ngưỡng so với baseline (main branch).
@@ -197,12 +197,12 @@ Trước khi triển khai LLM-as-judge làm gate chính trong CI, nên có một
 Một câu trả lời có thể đúng về nội dung nhưng sai về tone, hoặc đúng cả hai nhưng vi phạm guardrail (ví dụ lộ thông tin không nên lộ). Thiết kế judge trả về nhiều trường (correctness, tone, safety, đúng schema) thay vì một điểm tổng duy nhất giúp debug dễ hơn nhiều khi pass rate giảm — biết giảm ở chiều nào để sửa đúng chỗ.
 
 ### Golden dataset cho retrieval khác golden dataset cho generation
-Nếu hệ thống có RAG (Tuần 2), eval retrieval (đúng document có được lấy về không — xem lại Ngày 13) và eval generation (câu trả lời cuối có đúng/hữu ích không) là hai bộ eval khác nhau, chạy độc lập. Một pipeline có thể retrieval tốt nhưng generation tệ (model không dùng context đúng cách), hoặc ngược lại — trộn chung hai loại eval làm mất khả năng chẩn đoán lỗi nằm ở tầng nào.
+Nếu hệ thống có RAG (Tuần 2), eval retrieval (đúng document có được lấy về không — xem lại Phần 13) và eval generation (câu trả lời cuối có đúng/hữu ích không) là hai bộ eval khác nhau, chạy độc lập. Một pipeline có thể retrieval tốt nhưng generation tệ (model không dùng context đúng cách), hoặc ngược lại — trộn chung hai loại eval làm mất khả năng chẩn đoán lỗi nằm ở tầng nào.
 
 ## Bài tập senior
 Một đồng nghiệp đề xuất: "Mình dùng chính model production (ví dụ Claude Sonnet) để judge output của chính nó luôn, đỡ phải trả tiền gọi thêm model khác." Viết một nhận xét review ngắn (dạng bullet) chỉ ra rủi ro cụ thể của cách làm này (liên hệ self-preference bias đã học ở trên), đề xuất phương án thay thế hoặc cách giảm rủi ro nếu vẫn buộc phải dùng cùng họ model vì lý do chi phí, và nêu rõ trường hợp nào self-judge vẫn tạm chấp nhận được (ví dụ: chỉ dùng cho rule-based check được diễn đạt qua LLM như "output có đúng format JSON schema X không" — tiêu chí khách quan, ít chỗ cho bias thẩm định chủ quan).
 
-## Checklist trước khi qua Ngày 23
+## Checklist trước khi qua Phần 23
 - [ ] Giải thích được vì sao "thử vài prompt bằng tay" không phải eval, bằng lý do cụ thể không chỉ cảm giác.
 - [ ] Biết cấu trúc một golden dataset tối thiểu: category, input, tiêu chí chấm, có case từ lỗi thật.
 - [ ] Kể được ít nhất 2 loại bias của LLM-as-judge (self-preference, length, hoặc position) và cách giảm ảnh hưởng.

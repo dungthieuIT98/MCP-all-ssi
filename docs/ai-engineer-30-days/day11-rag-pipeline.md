@@ -1,7 +1,7 @@
-# Ngày 11 — RAG pipeline đầy đủ: retrieve → rerank → generate
+# Phần 11 — RAG pipeline đầy đủ: retrieve → rerank → generate
 
 ## Mục tiêu hôm nay
-Ghép các khái niệm rời rạc của Ngày 8-10 (embedding, vector DB, chunking) thành một kiến trúc pipeline đầy đủ, và học cách nhìn ra những chỗ pipeline RAG dễ vỡ nhất trong thực tế — vì phần lớn demo RAG "chạy được" trên slide nhưng vỡ khi gặp câu hỏi thật.
+Ghép các khái niệm rời rạc của Phần 8-10 (embedding, vector DB, chunking) thành một kiến trúc pipeline đầy đủ, và học cách nhìn ra những chỗ pipeline RAG dễ vỡ nhất trong thực tế — vì phần lớn demo RAG "chạy được" trên slide nhưng vỡ khi gặp câu hỏi thật.
 
 ## Đọc trước
 - [Anthropic — RAG cookbook/guide](https://docs.anthropic.com/) (tìm mục retrieval-augmented generation trong docs Anthropic)
@@ -15,13 +15,13 @@ RAG (Retrieval-Augmented Generation) có hai luồng tách biệt cần phân bi
 
 **Luồng ingest (offline, chạy khi có tài liệu mới hoặc cập nhật, không nằm trên đường request của user):**
 1. **Ingest**: thu thập tài liệu nguồn (crawl web, đọc file, gọi API nội bộ).
-2. **Chunk**: chia thành đoạn nhỏ theo chiến lược phù hợp (Ngày 10).
-3. **Embed**: gọi model embedding, sinh vector cho mỗi chunk (Ngày 8).
-4. **Store**: lưu vector + metadata (nguồn, vị trí trong tài liệu gốc, timestamp) vào vector DB/pgvector (Ngày 9).
+2. **Chunk**: chia thành đoạn nhỏ theo chiến lược phù hợp (Phần 10).
+3. **Embed**: gọi model embedding, sinh vector cho mỗi chunk (Phần 8).
+4. **Store**: lưu vector + metadata (nguồn, vị trí trong tài liệu gốc, timestamp) vào vector DB/pgvector (Phần 9).
 
 **Luồng query (online, chạy mỗi khi user hỏi, nằm trên đường request — mọi bước ở đây cộng trực tiếp vào latency user cảm nhận được):**
 5. **Retrieve**: embed câu hỏi của user, tìm top-k chunk gần nhất trong vector DB.
-6. **(Rerank)**: dùng một model chuyên biệt (cross-encoder) sắp xếp lại top-k theo độ liên quan chính xác hơn (Ngày 12) — bước tuỳ chọn nhưng thường cải thiện chất lượng đáng kể.
+6. **(Rerank)**: dùng một model chuyên biệt (cross-encoder) sắp xếp lại top-k theo độ liên quan chính xác hơn (Phần 12) — bước tuỳ chọn nhưng thường cải thiện chất lượng đáng kể.
 7. **Augment prompt**: chèn các chunk đã chọn vào prompt gửi cho LLM, kèm hướng dẫn rõ (chỉ trả lời dựa trên context được cung cấp, cite nguồn nếu cần).
 8. **Generate**: LLM sinh câu trả lời dựa trên context đã augment.
 
@@ -117,15 +117,15 @@ print(augment_and_generate(query, chunks))
 Hiện tượng LLM chú ý không đồng đều theo vị trí thông tin trong context dài — thông tin ở đầu/cuối thường được dùng chính xác hơn thông tin ở giữa. Hệ quả thực dụng: khi có nhiều chunk quan trọng, xem xét thứ tự sắp xếp trước khi đưa vào prompt (ví dụ đặt chunk có độ liên quan cao nhất gần đầu hoặc gần cuối context, không chôn nó ở giữa một danh sách dài). Đọc thêm các bài nghiên cứu và blog kỹ thuật về "lost in the middle" của các nhà cung cấp LLM lớn để hiểu rõ ở model cụ thể đang dùng — hành vi này có thể khác nhau giữa các model/version.
 
 ### Agentic RAG / retrieval nhiều bước
-RAG "cổ điển" là một lượt retrieve-rồi-generate. Các hệ thống nâng cao hơn cho phép LLM tự quyết định có cần retrieve thêm không, retrieve lại với query khác nếu lần đầu không đủ thông tin, hoặc gọi nhiều nguồn khác nhau tuỳ câu hỏi — bản chất là biến retrieval thành một "tool" mà agent loop (Ngày 17) có thể gọi lặp lại. Đây là hướng phát triển tự nhiên của RAG khi kết hợp với tool-calling, sẽ gặp lại ở Tuần 3.
+RAG "cổ điển" là một lượt retrieve-rồi-generate. Các hệ thống nâng cao hơn cho phép LLM tự quyết định có cần retrieve thêm không, retrieve lại với query khác nếu lần đầu không đủ thông tin, hoặc gọi nhiều nguồn khác nhau tuỳ câu hỏi — bản chất là biến retrieval thành một "tool" mà agent loop (Phần 17) có thể gọi lặp lại. Đây là hướng phát triển tự nhiên của RAG khi kết hợp với tool-calling, sẽ gặp lại ở Tuần 3.
 
 ### Đánh giá "context đủ chưa" trước khi generate
-Một số pipeline RAG nâng cao thêm bước kiểm tra trung gian: sau khi retrieve, hỏi (chính LLM, hoặc một model nhỏ hơn/rẻ hơn) "context này có đủ để trả lời câu hỏi không" trước khi đi tới bước generate cuối — nếu không đủ, hệ thống có thể retrieve lại với query viết lại (query rewriting, xem Ngày 12) hoặc trả lời "không tìm thấy" sớm, tránh generate một câu trả lời nửa vá dựa trên context không đủ.
+Một số pipeline RAG nâng cao thêm bước kiểm tra trung gian: sau khi retrieve, hỏi (chính LLM, hoặc một model nhỏ hơn/rẻ hơn) "context này có đủ để trả lời câu hỏi không" trước khi đi tới bước generate cuối — nếu không đủ, hệ thống có thể retrieve lại với query viết lại (query rewriting, xem Phần 12) hoặc trả lời "không tìm thấy" sớm, tránh generate một câu trả lời nửa vá dựa trên context không đủ.
 
 ## Bài tập senior
 Review đoạn thiết kế pipeline sau (giả định do một dev khác trong team đề xuất) và chỉ ra ít nhất 3 vấn đề cụ thể, kèm đề xuất sửa: "Pipeline của chúng ta: user hỏi → embed câu hỏi → lấy top-20 chunk gần nhất theo cosine similarity (không lọc ngưỡng) → nhồi toàn bộ 20 chunk vào prompt kèm câu hỏi → gọi Claude sinh câu trả lời → trả thẳng câu trả lời cho user, không kèm nguồn." Với mỗi vấn đề, giải thích tác động thực tế (chi phí, latency, độ tin cậy, khả năng audit) không chỉ nói "sai vì không đúng best practice".
 
-## Checklist trước khi qua Ngày 12
+## Checklist trước khi qua Phần 12
 - [ ] Vẽ được (trên giấy hoặc mô tả bằng lời) toàn bộ pipeline RAG, phân biệt rõ luồng ingest (offline) và luồng query (online).
 - [ ] Giải thích được vì sao retrieval là chỗ quyết định chất lượng, không phải bước generate.
 - [ ] Nêu được ít nhất 3 lỗi thực tế thường gặp (retrieval sai, context quá dài, thiếu citation) kèm cách giảm rủi ro cho mỗi lỗi.

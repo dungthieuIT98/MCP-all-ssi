@@ -1,4 +1,4 @@
-# Ngày 24 — Cost engineering: caching, batching, model routing
+# Phần 24 — Cost engineering: caching, batching, model routing
 
 ## Mục tiêu hôm nay
 Học cách giảm chi phí LLM có chủ đích — prompt caching, Batch API, model routing, và giảm token đầu vào/đầu ra — thay vì phản xạ mặc định "dùng model to nhất cho mọi việc".
@@ -26,9 +26,9 @@ Cơ chế thật cần hiểu đúng, không chỉ ở mức "cache thì rẻ h�
 ### Batch API — đánh đổi latency lấy giá
 Batch API (Message Batches của Anthropic) cho phép gửi một lượng lớn request cùng lúc, xử lý bất đồng bộ (không real-time), nhận kết quả sau một khoảng thời gian xử lý dài hơn nhiều so với gọi API thông thường, đổi lại giá rẻ hơn đáng kể so với gọi trực tiếp.
 
-- Phù hợp cho việc **không cần trả lời ngay cho user đang chờ**: xử lý hàng loạt tài liệu (tóm tắt, phân loại, trích xuất thông tin), chạy lại toàn bộ golden dataset cho eval (Ngày 22) khi không cần kết quả tức thì, tiền xử lý dữ liệu cho pipeline offline, gắn label cho tập dữ liệu training/eval.
+- Phù hợp cho việc **không cần trả lời ngay cho user đang chờ**: xử lý hàng loạt tài liệu (tóm tắt, phân loại, trích xuất thông tin), chạy lại toàn bộ golden dataset cho eval (Phần 22) khi không cần kết quả tức thì, tiền xử lý dữ liệu cho pipeline offline, gắn label cho tập dữ liệu training/eval.
 - Không phù hợp cho bất kỳ luồng có user đang chờ phản hồi trực tiếp (chat, tool-calling trong agent loop) — latency của batch có thể là hàng giờ, không phải giây.
-- Thiết kế hệ thống thực dụng: tách rõ hai luồng ngay từ đầu — luồng real-time (dùng API thông thường, có thể kèm streaming — Ngày 25) và luồng batch (dùng Batch API cho việc xử lý số lượng lớn không gấp) — không trộn lẫn hai luồng vào cùng một code path, vì logic retry/timeout/theo dõi trạng thái của batch job khác hẳn một API call đồng bộ thông thường (batch job có trạng thái pending/processing/completed cần polling hoặc webhook, không phải request-response tức thì).
+- Thiết kế hệ thống thực dụng: tách rõ hai luồng ngay từ đầu — luồng real-time (dùng API thông thường, có thể kèm streaming — Phần 25) và luồng batch (dùng Batch API cho việc xử lý số lượng lớn không gấp) — không trộn lẫn hai luồng vào cùng một code path, vì logic retry/timeout/theo dõi trạng thái của batch job khác hẳn một API call đồng bộ thông thường (batch job có trạng thái pending/processing/completed cần polling hoặc webhook, không phải request-response tức thì).
 
 ### Model routing — dùng đúng model cho đúng việc
 Ý tưởng: không phải mọi request đều cần model mạnh nhất/đắt nhất. Model routing là kiến trúc định tuyến request tới model phù hợp với độ khó của task đó, thường theo 2 cách:
@@ -39,13 +39,13 @@ Batch API (Message Batches của Anthropic) cho phép gửi một lượng lớn
 Đánh đổi cần cân nhắc khi thiết kế routing động:
 - Thêm một lệnh gọi model (trọng tài) trước khi xử lý thật nghĩa là thêm latency và thêm một điểm có thể lỗi — với task thực sự dễ, tổng latency (gọi trọng tài + gọi model rẻ) có khi còn chậm hơn gọi thẳng model đắt một lần.
 - Trọng tài có thể phân loại sai (đánh giá nhầm việc khó thành dễ) — cần có eval riêng cho chính bước routing này (đo tỉ lệ misroute), không mặc định tin trọng tài luôn đúng.
-- Ngưỡng "khi nào escalate" nên có thể điều chỉnh và theo dõi qua thời gian (giống ngưỡng canary ở Ngày 23) — không phải hằng số cố định mãi.
+- Ngưỡng "khi nào escalate" nên có thể điều chỉnh và theo dõi qua thời gian (giống ngưỡng canary ở Phần 23) — không phải hằng số cố định mãi.
 
 ### Giảm token đầu vào/đầu ra có chủ đích
 Trước khi nghĩ tới đổi model, nhiều hệ thống có thể giảm chi phí đáng kể chỉ bằng cách giảm số token thực sự cần gửi/nhận:
 
-- **Đầu vào**: cắt bớt context không cần thiết (ví dụ trong RAG, chỉ đưa vào các chunk thực sự liên quan sau rerank — Ngày 12 — thay vì nhồi tất cả kết quả retrieval thô); tóm tắt lịch sử hội thoại dài thay vì gửi full transcript mỗi lần (đánh đổi với mất chi tiết — cần cân nhắc theo bài toán); rút ngắn system prompt/tool definition dài dòng nếu không cần thiết cho chất lượng.
-- **Đầu ra**: giới hạn `max_tokens` hợp lý theo nhu cầu thật (không đặt tuỳ ý một số lớn "cho chắc" nếu câu trả lời thực tế luôn ngắn); yêu cầu structured output (Ngày 4) súc tích (ví dụ JSON có field cần thiết, không yêu cầu model giải thích dài dòng nếu ứng dụng chỉ cần con số/field đó); với tác vụ lặp (ví dụ phân loại hàng loạt), thiết kế output ở dạng ngắn nhất có thể biểu diễn đủ thông tin (ví dụ trả về 1 ký tự category thay vì câu văn đầy đủ).
+- **Đầu vào**: cắt bớt context không cần thiết (ví dụ trong RAG, chỉ đưa vào các chunk thực sự liên quan sau rerank — Phần 12 — thay vì nhồi tất cả kết quả retrieval thô); tóm tắt lịch sử hội thoại dài thay vì gửi full transcript mỗi lần (đánh đổi với mất chi tiết — cần cân nhắc theo bài toán); rút ngắn system prompt/tool definition dài dòng nếu không cần thiết cho chất lượng.
+- **Đầu ra**: giới hạn `max_tokens` hợp lý theo nhu cầu thật (không đặt tuỳ ý một số lớn "cho chắc" nếu câu trả lời thực tế luôn ngắn); yêu cầu structured output (Phần 4) súc tích (ví dụ JSON có field cần thiết, không yêu cầu model giải thích dài dòng nếu ứng dụng chỉ cần con số/field đó); với tác vụ lặp (ví dụ phân loại hàng loạt), thiết kế output ở dạng ngắn nhất có thể biểu diễn đủ thông tin (ví dụ trả về 1 ký tự category thay vì câu văn đầy đủ).
 - Nguyên tắc: đo trước khi tối ưu — dùng token usage thật trả về trong response (không đoán) để biết phần nào của request đang tốn nhiều token nhất, rồi tối ưu đúng chỗ đó, tránh tối ưu cảm tính.
 
 ## Đối chiếu với code thật trong repo
@@ -155,12 +155,12 @@ Khác với cache HTTP (key thường là URL/hash toàn bộ request), prompt c
 Một lỗi thiết kế routing hay gặp: dùng model rẻ cho câu hỏi tưởng là dễ nhưng thực ra khó, model trả lời sai, user không hài lòng, phải hỏi lại hoặc escalate lên người — tổng chi phí (gồm cả chi phí vận hành support, chi phí trải nghiệm user) cao hơn nhiều so với việc route đúng ngay từ đầu bằng model đắt hơn một chút. Cost engineering không chỉ nhìn giá tiền API mà phải nhìn tổng chi phí vòng đời của một request sai.
 
 ### Theo dõi cost per outcome, không chỉ cost per request
-Metric "chi phí trung bình mỗi request" dễ đánh lừa nếu không gắn với outcome — một hệ thống rẻ hơn mỗi request nhưng tỉ lệ phải hỏi lại/escalate cao hơn có thể đắt hơn về tổng thể. Metric hữu ích hơn: chi phí trung bình mỗi *tác vụ hoàn thành thành công* (tính cả các lần retry/escalate dẫn tới hoàn thành đó) — cần kết hợp dữ liệu cost với dữ liệu chất lượng từ Ngày 22-23 mới tính được.
+Metric "chi phí trung bình mỗi request" dễ đánh lừa nếu không gắn với outcome — một hệ thống rẻ hơn mỗi request nhưng tỉ lệ phải hỏi lại/escalate cao hơn có thể đắt hơn về tổng thể. Metric hữu ích hơn: chi phí trung bình mỗi *tác vụ hoàn thành thành công* (tính cả các lần retry/escalate dẫn tới hoàn thành đó) — cần kết hợp dữ liệu cost với dữ liệu chất lượng từ Phần 22-23 mới tính được.
 
 ## Bài tập senior
 Team bạn đang trả tiền model cho một tính năng "tóm tắt báo cáo nội bộ hằng ngày" — chạy 1 lần/ngày cho khoảng vài nghìn báo cáo, không có user chờ real-time, hiện đang gọi API thông thường (không dùng Batch API) với model mạnh nhất cho toàn bộ, không phân loại độ khó. Viết một đề xuất cải tiến cost (dạng bullet, ước lượng định tính "giảm được nhiều/ít" không cần số cụ thể) áp dụng ít nhất 3 trong 4 kỹ thuật đã học (caching, batching, routing, giảm token) — nêu rõ thứ tự triển khai ưu tiên và lý do (kỹ thuật nào rủi ro thấp/lợi ích cao nên làm trước).
 
-## Checklist trước khi qua Ngày 25
+## Checklist trước khi qua Phần 25
 - [ ] Giải thích đúng cơ chế prompt caching: prefix match, thời gian sống, giá không đối xứng giữa cache write/read.
 - [ ] Biết khi nào Batch API phù hợp và khi nào tuyệt đối không dùng được (luồng real-time).
 - [ ] Thiết kế được một bước triage/routing đơn giản, hiểu đánh đổi latency thêm vs tiết kiệm cost.

@@ -1,7 +1,7 @@
-# Ngày 23 — Online eval & A/B: theo dõi chất lượng khi đã lên production
+# Phần 23 — Online eval & A/B: theo dõi chất lượng khi đã lên production
 
 ## Mục tiêu hôm nay
-Hiểu vì sao offline eval (Ngày 22) không đủ khi hệ thống đã chạy production, và nắm được các kỹ thuật online eval: shadow testing, canary rollout, feedback signal thật, và theo dõi drift khi model thay đổi ngầm.
+Hiểu vì sao offline eval (Phần 22) không đủ khi hệ thống đã chạy production, và nắm được các kỹ thuật online eval: shadow testing, canary rollout, feedback signal thật, và theo dõi drift khi model thay đổi ngầm.
 
 ## Đọc trước
 - [Anthropic docs](https://docs.anthropic.com/) — mục về model versioning/deprecation (tìm "model deprecations", nội dung/URL cụ thể tra tại thời điểm đọc).
@@ -19,7 +19,7 @@ Chạy một phiên bản mới (model mới, prompt mới, pipeline mới) **so
 - Cách làm: mỗi request thật vẫn được xử lý bình thường bởi phiên bản hiện tại (trả về cho user), đồng thời fire một request giống hệt input đó tới phiên bản mới (thường async, không block response cho user), lưu output của cả hai để so sánh.
 - Lợi ích: kiểm tra được phiên bản mới trên **traffic thật 100%**, không có rủi ro ảnh hưởng tới user vì user không bao giờ thấy output của phiên bản shadow.
 - Chi phí thật cần tính: mỗi request giờ tốn gấp đôi lệnh gọi API (cả bản cũ và bản mới đều chạy) — với hệ thống LLM, đây là chi phí tiền thật đáng kể, không phải chi phí "miễn phí" như shadow testing cho một service CRUD thông thường. Cần cân nhắc chạy shadow trên một tỷ lệ mẫu (ví dụ 5-10% traffic) thay vì 100% nếu chi phí là vấn đề.
-- Hạn chế: không đo được phản ứng thật của user (vì user không thấy output mới) — chỉ so sánh được output hai bên bằng eval tự động (rule-based hoặc LLM-as-judge như Ngày 22), không đo được engagement/satisfaction thật.
+- Hạn chế: không đo được phản ứng thật của user (vì user không thấy output mới) — chỉ so sánh được output hai bên bằng eval tự động (rule-based hoặc LLM-as-judge như Phần 22), không đo được engagement/satisfaction thật.
 
 ### Canary rollout
 Đưa phiên bản mới ra phục vụ **một phần nhỏ user thật** (ví dụ 1%, 5%), theo dõi metric sát sao, tăng dần tỷ lệ nếu ổn, rollback ngay nếu metric xấu đi.
@@ -46,7 +46,7 @@ Rủi ro đặc thù của hệ thống dựa trên model do bên thứ ba cung 
 - Cách giảm rủi ro:
   - **Pin version cụ thể** khi nhà cung cấp cho phép (ví dụ dùng tên model có ngày phát hành cụ thể thay vì alias "mới nhất") — giảm khả năng bị đổi ngầm, nhưng vẫn cần theo dõi thông báo deprecation vì version cụ thể cũng có ngày hết hỗ trợ.
   - **Theo dõi thông báo/changelog của nhà cung cấp** đều đặn — không đợi tự phát hiện qua lỗi production.
-  - **Chạy lại golden dataset (Ngày 22) định kỳ, không chỉ khi có PR đổi code** — nếu điểm eval tự nhiên giảm mà không có thay đổi code nào ở phía mình, dấu hiệu mạnh là model phía nhà cung cấp đã đổi hành vi.
+  - **Chạy lại golden dataset (Phần 22) định kỳ, không chỉ khi có PR đổi code** — nếu điểm eval tự nhiên giảm mà không có thay đổi code nào ở phía mình, dấu hiệu mạnh là model phía nhà cung cấp đã đổi hành vi.
   - **Theo dõi metric hành vi output** (độ dài trung bình, tỉ lệ refuse, format có ổn định không) theo thời gian — thay đổi đột ngột dù request pattern không đổi là tín hiệu cảnh báo sớm.
 - Đây là lý do online eval không phải việc làm một lần rồi xong — cần chạy liên tục, vì "hệ thống không đổi gì" không đảm bảo "model không đổi gì".
 
@@ -151,8 +151,8 @@ if __name__ == "__main__":
 
 ## Bài tập tự làm
 1. Chạy đoạn code trên, quan sát log shadow xuất hiện sau khi user đã "nhận" response — xác nhận thứ tự này (user không phải đợi candidate).
-2. Thêm một bước so sánh tự động vào `run_shadow_and_log`: dùng LLM-as-judge (như Ngày 22) để chấm "candidate_output có tốt hơn production_output không", log kết quả so sánh thay vì chỉ log raw text.
-3. Giả lập một escalate signal: viết một hàm `detect_rephrase(session_history: list[str]) -> bool` heuristic đơn giản (ví dụ so sánh độ dài chuỗi chung — hoặc dùng embedding similarity nếu đã học Ngày 8) phát hiện 2 câu hỏi liên tiếp trong session có cùng ý định nhưng câu chữ khác nhau.
+2. Thêm một bước so sánh tự động vào `run_shadow_and_log`: dùng LLM-as-judge (như Phần 22) để chấm "candidate_output có tốt hơn production_output không", log kết quả so sánh thay vì chỉ log raw text.
+3. Giả lập một escalate signal: viết một hàm `detect_rephrase(session_history: list[str]) -> bool` heuristic đơn giản (ví dụ so sánh độ dài chuỗi chung — hoặc dùng embedding similarity nếu đã học Phần 8) phát hiện 2 câu hỏi liên tiếp trong session có cùng ý định nhưng câu chữ khác nhau.
 4. Viết một bảng (dạng markdown) so sánh shadow testing và canary rollout theo 4 tiêu chí: rủi ro cho user thật, chi phí vận hành, tốc độ có kết luận, loại tín hiệu đo được.
 
 ## Đào sâu / nâng cao
@@ -169,7 +169,7 @@ Ngoài feedback signal tự động, một số hệ thống nghiêm túc còn c
 ## Bài tập senior
 Hệ thống production của bạn dùng một model qua API bên thứ ba với tên model dạng alias (không pin version cụ thể, vì nhà cung cấp khuyến nghị dùng alias để tự nhận bản cập nhật mới nhất). Tuần trước, pass rate trên golden dataset (chạy nightly) giảm 8 điểm phần trăm so với tuần trước đó, không có PR nào đổi code hay prompt trong khoảng thời gian đó. Viết một quy trình điều tra (dạng bước, không cần code) bạn sẽ làm để xác nhận/loại trừ giả thuyết "nhà cung cấp đã đổi model ngầm", và đề xuất 2 thay đổi vận hành để giảm rủi ro loại này xảy ra lại (đánh đổi giữa lợi ích tự nhận bản mới nhất và rủi ro bị đổi hành vi ngoài kiểm soát).
 
-## Checklist trước khi qua Ngày 24
+## Checklist trước khi qua Phần 24
 - [ ] Phân biệt được shadow testing và canary rollout: rủi ro, chi phí, loại tín hiệu đo được của mỗi cách.
 - [ ] Kể được ít nhất 3 loại feedback signal thật và biết vì sao mỗi loại chỉ là proxy có nhiễu, không phải chân lý tuyệt đối.
 - [ ] Giải thích được rủi ro drift khi nhà cung cấp đổi model ngầm, và ít nhất 2 cách giảm rủi ro.
