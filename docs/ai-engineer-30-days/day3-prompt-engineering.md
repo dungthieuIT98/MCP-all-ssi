@@ -119,6 +119,14 @@ def load_prompt(name: str, version: str) -> str:
 
 ## Bài tập tự làm
 1. Viết 2 phiên bản prompt cho cùng một tác vụ trích xuất thông tin (ví dụ: trích tên công ty + mã cổ phiếu từ một đoạn tin tức) — bản 1 chỉ mô tả bằng lời, bản 2 dùng few-shot với 3 ví dụ. Chạy cả hai trên 5 đoạn tin tức khác nhau, so sánh tỷ lệ đúng định dạng output.
+
+bạn là AI phân tích thông tin,  từ đoạn nội dung này hãy trích xuất thông tin và mã cổ phiếu cho tôi : <văn bản >
+
+-bạn là AI phân tích thông tin,  từ đoạn nội dung này hãy trích xuất thông tin và mã cổ phiếu cho tôi : 
+ví dụ : 
+văn bản 1 => công ty ssi mã cổ phiếu là ssi 
+
+<văn bản >
 2. Tạo một thư mục `prompts/` trong project cá nhân, viết 1 system prompt, commit vào git. Sửa prompt đó, commit lần 2 với message rõ ràng nêu lý do sửa (không chỉ "update prompt"). Dùng `git log` để xem lại lịch sử — đây là bài tập tối thiểu để tập quen version control prompt.
 3. Viết một system prompt có role cụ thể + ràng buộc hành vi rõ ràng (không chỉ danh xưng) cho một trợ lý trả lời câu hỏi nội bộ về quy trình công ty. So sánh với một system prompt chỉ có danh xưng ("Bạn là trợ lý nội bộ"), chạy cùng 3 câu hỏi giống nhau ở cả hai, nhận xét sự khác biệt về mức độ tuân theo ràng buộc.
 

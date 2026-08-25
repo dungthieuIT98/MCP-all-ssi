@@ -280,15 +280,75 @@ wrete cache và read cache  chỉ tốn 800 thôi .
 
 ## Câu hỏi cho Technical Leader
 
-1. **Ngân sách & FinOps**: Bạn được giao build một trợ lý AI dùng nội bộ cho 2000 nhân viên SSI, mỗi người trung bình 15 câu hỏi/ngày, mỗi câu có RAG context ~3000 token. Sếp hỏi "chi phí 1 năm là bao nhiêu, và nếu traffic tăng gấp 3 vào Q4 thì sao?" Bạn thiết kế cơ chế nào để dự báo và cảnh báo chi phí trước khi nó vượt ngân sách (không phải nhìn hoá đơn cuối tháng mới biết)? Đề xuất kiến trúc rate-limit/quota theo user, theo phòng ban, và điểm nào nên cảnh báo sớm.
+    1. **Ngân sách & FinOps**: Bạn được giao build một trợ lý AI dùng nội bộ cho 2000 nhân viên SSI, mỗi người trung bình 15 câu hỏi/ngày, mỗi câu có RAG context ~3000 token. Sếp hỏi "chi phí 1 năm là bao nhiêu, và nếu traffic tăng gấp 3 vào Q4 thì sao?" Bạn thiết kế cơ chế nào để dự báo và cảnh báo chi phí trước khi nó vượt ngân sách (không phải nhìn hoá đơn cuối tháng mới biết)? Đề xuất kiến trúc rate-limit/quota theo user, theo phòng ban, và điểm nào nên cảnh báo sớm.
 
 2. **Model routing như một quyết định kiến trúc, không chỉ tối ưu chi phí**: Nếu bạn thiết kế một hệ thống route câu hỏi tự động (câu đơn giản → Haiku, câu phức tạp → Opus): rủi ro gì phát sinh khi bộ phân loại route sai (câu phức tạp bị route nhầm sang model rẻ)? Ai chịu trách nhiệm khi model rẻ trả lời sai một câu hỏi liên quan đến số liệu tài chính/quy định — có nên áp dụng model routing cho mọi loại truy vấn, hay cần loại trừ một số nhóm nghiệp vụ (ví dụ liên quan UBCKNN, tư vấn đầu tư)?
+    Lớp 1 — Keyword/rule routing sang model mạnh
+
+Vấn đề: keyword-matching sẽ miss nhiều câu (người dùng không dùng đúng từ khoá "UBCKNN" nhưng vẫn hỏi về quy định niêm yết chẳng hạn). Nên coi keyword list là tập hợp mở, không đóng — tức là:
+
+Match keyword → chắc chắn route lên model mạnh (an toàn).
+Không match keyword → không có nghĩa là an toàn để route xuống model rẻ, vẫn cần lớp phân loại ngữ nghĩa (semantic classifier) phía sau làm lưới an toàn thứ hai, vì keyword list luôn có khoảng trống.
+Lớp 2 — Deny/chặn cứng cho nhóm nhạy cảm, bắt buộc người xác nhận
+
+Đây là phần quan trọng nhất và cần tách rõ hai loại "nhạy cảm":
+
+Nhạy cảm về nội dung quy định/tư vấn đầu tư → đúng như bạn nói, chặn auto-answer, bắt buộc người có thẩm quyền duyệt trước khi gửi ra ngoài (khớp với nguyên tắc human decision authority ở trên).
+Nhạy cảm về dữ liệu (OTP, số CMND/CCCD khách hàng, token, mật khẩu...) → đây không phải vấn đề "chọn model", mà là không được để lộ/xử lý ở bất kỳ model nào, bất kể mạnh hay yếu. Hai loại rule này nên tách riêng trong hệ thống, vì cách xử lý khác nhau (một là "escalate cho người", một là "refuse hoàn toàn").
+Lớp 3 — AI đánh giá độ khó, người dùng tự chọn model
+
+Đây là phần hay nhưng có một rủi ro ngược: nếu AI đánh giá "câu này đơn giản, dùng Haiku là đủ" và người dùng tin theo, thì bản chất vẫn là routing tự động — chỉ là thêm một bước UI cho người dùng "bấm xác nhận". Nó chỉ thực sự an toàn hơn routing tự động nếu:
+
+AI hiển thị lý do đánh giá (không chỉ độ khó, mà cả mức rủi ro hậu quả nếu sai), để người dùng chọn có thông tin, không phải chọn mù.
+Với câu đã bị đánh dấu ở Lớp 1/2, không đưa lựa chọn model rẻ vào menu — tức Lớp 3 chỉ áp dụng cho câu đã qua được Lớp 1 và 2, không phải lớp thay thế cho chúng.
+
 
 3. **Đánh đổi giữa cache/compaction và tính đúng đắn (correctness)**: Compaction làm mất thông tin gốc thật (nén thành tóm tắt do model tự viết). Với một agent nội bộ xử lý quy trình có tính pháp lý/tuân thủ (ví dụ tra cứu quy định giao dịch), bạn có chấp nhận để server tự động compact history hay không? Thiết kế nguyên tắc: khi nào bắt buộc giữ nguyên văn (không được tóm tắt/nén) và khi nào được phép compact, và cơ chế audit để biết một câu trả lời có dựa trên phần đã bị nén hay không.
+=> chỉ compact đoạn hội thoại , k compact văn bản gốc
+=> văn bản gốc phải đc lưu tách histoty, các câu trả lời phải trích dẫn chính sác tù văn bản gốc đó.
+
 
 4. **Lost-in-the-middle như một rủi ro compliance, không chỉ rủi ro UX**: Nếu một RAG system tra cứu quy định nội bộ đưa "quy định mới nhất" nằm giữa context (bị model bỏ sót) và trả lời dựa trên quy định cũ hơn nằm ở đầu/cuối — hệ quả có thể là tư vấn sai lệch cho khách hàng hoặc vi phạm quy định UBCKNN. Bạn thiết kế cơ chế nào ở tầng kiến trúc (không phải "dặn model cẩn thận hơn") để giảm rủi ro này về mức chấp nhận được, và làm sao đo lường được rủi ro đó thay vì chỉ tin cảm tính?
 
 5. **Đa ngôn ngữ và data residency/governance, không chỉ token cost**: Dữ liệu hợp đồng/quy định nội bộ SSI khi đưa vào context của một API bên thứ ba (Anthropic) — chính sách nào cần áp dụng trước khi cho phép loại dữ liệu nào đi qua LLM external, và khi nào bắt buộc phải dùng giải pháp on-prem/private deployment thay vì API công khai?
+
+Chính sách kiểm soát dữ liệu qua LLM bên ngoài (SSI):
+
+Dữ liệu được phân loại theo 4 tiêu chí — mức nhạy cảm (Công khai/Nội bộ/Giới hạn), có định danh khách hàng hay không, và có ràng buộc pháp lý về nơi lưu trữ hay không — để xác định kênh xử lý:
+
+Công khai, không định danh khách hàng → được gửi qua API ngoài (Anthropic) tự do.
+Nội bộ, không định danh khách hàng → được gửi qua API ngoài, nhưng phải qua lớp lọc DLP chạy on-prem trước (rule/regex cho dữ liệu có cấu trúc + phân loại ngữ nghĩa cho dữ liệu không cấu trúc, fail closed khi không phân loại rõ được), kèm log để An ninh thông tin audit định kỳ.
+Có định danh khách hàng nhưng không ràng buộc residency pháp lý → phải ẩn danh hoá/che thông tin định danh trước, sau đó mới qua lớp DLP như trên; review lại định kỳ.
+Có ràng buộc residency pháp lý và/hoặc thuộc project đã được xếp loại nhạy cảm đặc biệt → bắt buộc xử lý on-prem/private deployment toàn bộ, không đi qua API công khai dưới bất kỳ hình thức nào.
+Quyền truy cập vào từng loại dữ liệu được giới hạn theo role/phòng ban ngay từ đầu vào. Việc xếp một project vào nhóm 4 (bắt buộc on-prem) do An ninh thông tin và Bộ phận Luật & Tuân thủ xác nhận, không do đội kỹ thuật tự quyết — và phải được đánh giá lại mỗi khi phạm vi dữ liệu của project thay đổi. Trước khi cho phép bất kỳ dữ liệu Nội bộ/Giới hạn nào đi qua API ngoài, phải xác nhận được điều khoản hợp đồng với nhà cung cấp về việc dữ liệu không bị dùng để huấn luyện model và có chính sách lưu giữ (retention) rõ ràng — nếu chưa xác nhận được, mặc định coi như chưa được phép.
+
+6. **Observability cho chi phí/token ở tầng hệ thống, không chỉ ở tầng 1 request**: Với hàng chục tính năng LLM chạy song song trong công ty (chatbot nội bộ, MCP tool cho Superset, RAG hợp đồng...), làm sao biết **tính năng nào đang đốt tiền nhiều nhất** khi hoá đơn API là một con số gộp duy nhất từ Anthropic? Thiết kế cơ chế gắn nhãn (tagging) request theo tính năng/team/user để có thể breakdown chi phí, và nên log những field nào (input_tokens, cache_read, cache_creation, output_tokens, model, feature_id...) để sau này trả lời được câu "tại sao tháng này đắt hơn tháng trước" mà không phải đoán.
+Đúng hướng — dùng một web app monitoring (self-hosted, ví dụ Langfuse hoặc Helicone) và tự định nghĩa các cột log theo nhu cầu. Chốt lại bảng cột đã thống nhất ở các câu trước:
+
+Bảng cột cho hệ thống monitoring token/chi phí LLM:
+
+Cột	Ý nghĩa
+request_id	ID định danh duy nhất mỗi request, dùng để trace/điều tra khi cần
+feature_id	Tính năng nào gọi (chatbot nội bộ, MCP Superset, RAG hợp đồng...)
+project_id	Project/dự án nào
+team	Phòng ban chịu chi phí
+user_id	Ai gọi (nội bộ)
+timestamp	Thời điểm gọi — để group theo giờ/ngày/tháng
+model	Model nào được dùng (vì giá khác nhau theo model)
+input_tokens	Số token đầu vào
+output_tokens	Số token đầu ra (thường đắt hơn input)
+cache_read_tokens	Token đọc từ cache (rẻ hơn, quan trọng để biết cache có hiệu quả không)
+cache_creation_tokens	Token tạo cache mới
+Với bảng này, web app monitoring (Langfuse/Helicone tự host) sẽ tự tính ra chi phí theo từng dòng dựa trên giá của từng model, rồi cho phép filter/group theo bất kỳ cột nào (theo feature, theo user, theo tháng...) để trả lời trực tiếp câu hỏi "tính năng nào đốt tiền nhiều nhất" và "tại sao tháng này đắt hơn" mà không cần đoán.
+
+
+7. **Prompt injection qua context dài — rủi ro bảo mật, không chỉ rủi ro chi phí**: Nếu một RAG system hoặc agent MCP đưa nội dung từ nguồn không tin cậy (tài liệu người dùng paste vào, kết quả trả về từ một tool gọi API bên ngoài) thẳng vào context, kẻ tấn công có thể nhúng chỉ thị giả ("ignore previous instructions...") trong chính nội dung đó. Bạn thiết kế ranh giới nào giữa "nội dung để đọc" và "chỉ thị để thực thi" ở tầng kiến trúc prompt (không phải chỉ dặn model "cẩn thận với instruction lạ")? Nhóm nào trong hệ thống MCP nội bộ (ví dụ tool trả JSON từ Superset) cần áp dụng nguyên tắc này trước tiên?
+
+8. **Đánh giá chất lượng RAG — làm sao biết retrieval đang lấy đúng, không chỉ tin cảm tính**: Sau khi triển khai RAG cho hợp đồng/quy định, làm sao đo lường một cách có hệ thống việc "retrieval có lấy đúng đoạn liên quan hay không" và "câu trả lời có bám sát đúng đoạn được lấy hay không" (tách bạch hai loại lỗi: lỗi retrieval vs lỗi generation)? Đề xuất một bộ test case tối thiểu (golden set) và tần suất re-run cần thiết khi thay đổi chunking strategy hoặc đổi embedding model.
+
+9. **Multi-tenant context isolation**: Nếu một hệ thống AI nội bộ phục vụ nhiều phòng ban (mỗi phòng có tài liệu/dữ liệu riêng, có phòng xử lý dữ liệu khách hàng nhạy cảm hơn phòng khác) dùng chung một RAG pipeline và vector store — rủi ro gì nếu retrieval của phòng A vô tình lấy nhầm tài liệu của phòng B vào context? Thiết kế cơ chế cách ly (isolation) ở tầng nào (index riêng, metadata filter bắt buộc, hay hạ tầng riêng hoàn toàn) là đủ, và đánh đổi chi phí/độ phức tạp vận hành giữa các lựa chọn đó.
+
+10. **Vendor lock-in và kế hoạch dự phòng (fallback)**: Toàn bộ thiết kế cache/compaction/token counting ở trên gắn chặt với API cụ thể của Anthropic (cấu trúc `cache_control`, beta header `compact-*`, endpoint `count_tokens`). Nếu một ngày cần chuyển sang model khác (đổi nhà cung cấp, hoặc dùng song song nhiều model cho các tác vụ khác nhau), phần nào trong kiến trúc hiện tại sẽ phải viết lại hoàn toàn, và phần nào có thể trừu tượng hoá (abstraction layer) từ đầu để giảm chi phí chuyển đổi sau này? Đánh đổi giữa "tối ưu sâu cho 1 vendor" và "giữ khả năng portable" nên nghiêng về bên nào ở giai đoạn hiện tại của dự án?
 
 ## Checklist trước khi qua Ngày kế
 - [ ] Giải thích được vì sao không dùng `tiktoken` để đếm token cho Claude.
